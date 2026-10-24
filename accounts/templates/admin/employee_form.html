@@ -1,0 +1,114 @@
+{# -- Page: Employee Add/Edit Form -- #}
+{# Used for both creating and editing employee accounts. The page title   #}
+{# is passed via context as `title`. Form fields are rendered manually    #}
+{# (not via {{ form.as_p }}) for custom layout control. Includes inline   #}
+{# validation errors displayed per-field.                                 #}
+{#                                                                         #}
+{# Form field groups:                                                      #}
+{#   Row 1: Username (required, *) + Email                                 #}
+{#   Row 2: First Name + Last Name                                         #}
+{#   Row 3: Role (dropdown) + Gender (dropdown)                            #}
+{#   Row 4: Manager (select) — hidden via JS when role = 'manager'         #}
+{#   Row 5: Password + Confirm Password                                    #}
+{#                                                                         #}
+{# JS logic: When role is set to 'manager', the manager selection field    #}
+{# is hidden (managers don't report to another manager).                  #}
+{# ======================================================================= #}
+{% extends 'base.html' %}
+{% block title %}{{ title }} — WorkPulse{% endblock %}
+{% block page_title %}{{ title }}{% endblock %}
+{% block page_subtitle %}Manage user account{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card glass-card p-4">
+            <form method="POST">
+                {% csrf_token %}
+                {# -- Non-field errors (e.g. password mismatch) -- #}
+                {% if form.non_field_errors %}
+                <div class="alert alert-danger">{% for e in form.non_field_errors %}<p class="mb-0 small">{{ e }}</p>{% endfor %}</div>
+                {% endif %}
+
+                {# -- Field group: Username + Email -- #}
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Username *</label>
+                        {{ form.username }}
+                        {% if form.username.errors %}<div class="text-danger small mt-1">{{ form.username.errors.0 }}</div>{% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Email</label>
+                        {{ form.email }}
+                    </div>
+                </div>
+                {# -- Field group: First Name + Last Name -- #}
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">First Name</label>
+                        {{ form.first_name }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Last Name</label>
+                        {{ form.last_name }}
+                    </div>
+                </div>
+                {# -- Field group: Role + Gender -- #}
+                <div class="row g-3 mb-3" id="roleManagerRow">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">{{ form.role.label }}</label>
+                        {{ form.role }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">{{ form.gender.label }}</label>
+                        {{ form.gender }}
+                    </div>
+                </div>
+                {# -- Field: Manager (conditionally hidden) -- #}
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6" id="managerFieldWrapper">
+                        <label class="form-label small fw-semibold">{{ form.manager.label }}</label>
+                        {{ form.manager }}
+                    </div>
+                </div>
+                {# -- Field group: Password + Confirm Password -- #}
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">{{ form.password.label }}</label>
+                        {{ form.password }}
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">{{ form.confirm_password.label }}</label>
+                        {{ form.confirm_password }}
+                    </div>
+                </div>
+
+                {# -- Form actions -- #}
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-rounded"><i class="bi bi-check-lg me-1"></i>Save</button>
+                    <a href="{% url 'employee_list' %}" class="btn btn-outline-secondary btn-rounded">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{# -- Hides the Manager field when the selected role is 'manager' -- #}
+{# Managers do not report to another manager, so the field is irrelevant. #}
+<script>
+    (function() {
+        var roleField = document.querySelector('[name="role"]');
+        var managerWrapper = document.getElementById('managerFieldWrapper');
+        function toggleManager() {
+            if (roleField && managerWrapper) {
+                managerWrapper.style.display = roleField.value === 'manager' ? 'none' : '';
+            }
+        }
+        if (roleField) {
+            roleField.addEventListener('change', toggleManager);
+            toggleManager();
+        }
+    })();
+</script>
+{% endblock %}

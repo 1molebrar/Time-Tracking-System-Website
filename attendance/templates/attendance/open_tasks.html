@@ -1,0 +1,54 @@
+{# -- Page: Open Tasks Pool -- #}
+{# -- Displays all unassigned (open) tasks as a grid of cards, each showing title, priority badge, #}
+{# -- description (truncated to 25 words), project name, estimated hours, deadline with overdue #}
+{# -- highlighting, and a "Claim Task" button. Any user can claim a task, which assigns it to them. #}
+{# -- Falls back to an empty state if no open tasks exist. -- #}
+{% extends 'base.html' %}
+{% block title %}Open Tasks — WorkPulse{% endblock %}
+{% block page_title %}Open Tasks Pool{% endblock %}
+{% block page_subtitle %}Unassigned tasks available for claiming{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    {% for t in tasks %}
+    {# -- Task card: responsive grid (3 cols on lg, 2 on md, 1 on sm). Flex column layout ensures #}
+    {# -- the claim button sticks to the bottom via mt-auto. Shows title, priority badge, description, #}
+    {# -- project folder, estimated hours, deadline (with overdue warning), and claim CTA. -- #}
+    <div class="col-md-6 col-lg-4">
+        <div class="card glass-card h-100">
+            <div class="card-body d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="fw-semibold mb-0">{{ t.title }}</h6>
+                    {% if t.priority == 'urgent' %}<span class="badge bg-danger ms-2">Urgent</span>
+                    {% elif t.priority == 'high' %}<span class="badge bg-warning text-dark ms-2">High</span>
+                    {% elif t.priority == 'medium' %}<span class="badge bg-primary ms-2">Medium</span>
+                    {% else %}<span class="badge bg-success ms-2">Low</span>{% endif %}
+                </div>
+                <p class="small text-muted mb-2 flex-grow-1">{{ t.description|truncatewords:25|default:'No description' }}</p>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small class="text-muted"><i class="bi bi-folder me-1"></i>{{ t.project.name }}</small>
+                    {% if t.estimated_hours > 0 %}
+                    <small class="text-muted"><i class="bi bi-clock me-1"></i>{{ t.estimated_hours }}h est.</small>
+                    {% endif %}
+                </div>
+                {% if t.deadline %}
+                <div class="mb-2">
+                    <small class="{% if t.is_overdue %}text-danger{% else %}text-muted{% endif %}">
+                        <i class="bi bi-calendar3 me-1"></i>Due: {{ t.deadline|date:"d M Y" }}
+                        {% if t.is_overdue %}<span class="fw-semibold">(Overdue)</span>{% endif %}
+                    </small>
+                </div>
+                {% endif %}
+                <a href="{% url 'claim_task' t.id %}" class="btn btn-success btn-rounded w-100 mt-auto">
+                    <i class="bi bi-hand-index-thumb me-1"></i>Claim Task
+                </a>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        {% include 'components/_empty_state.html' with icon='inbox' title='No open tasks' message='No open tasks available. All tasks have been claimed!' %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,212 @@
+{# -- Page: Task Detail -- #}
+{# -- Purpose: Full detail view for a single task. Shows metadata (status, priority, assignee, deadline), estimated vs logged hours, progress bar, description, completion note, creator info, recent time entries (last 20), and a sidebar for quick status transitions and task completion. Extends base.html. -- #}
+{% extends 'base.html' %}
+{% block title %}{{ task.title }} — WorkPulse{% endblock %}
+{% block page_title %}{{ task.title }}{% endblock %}
+{% block page_subtitle %}{{ task.project.name }}{% endblock %}
+{% block content %}
+{# -- Section: Main content row (detail + sidebar) -- #}
+<div class="row g-4">
+    {# -- Left column: Task details and time entries -- #}
+    <div class="col-lg-8">
+        {# -- Card: Task details header -- #}
+        {# -- Header bar with action buttons: Claim Task (if unassigned and user can claim), Start/Stop Timer (toggles based on active_timer state), Edit (for admin/manager/owner). -- #}
+        <div class="card glass-card">
+            <div class="card-header py-3 px-4 d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-info-circle me-2" style="color:var(--accent);"></i>Details</span>
+                <div class="d-flex gap-2">
+                    {% if can_claim %}
+                    <a href="{% url 'claim_task' task.id %}" class="btn btn-sm btn-success btn-rounded">
+                        <i class="bi bi-hand-index-thumb me-1"></i>Claim Task
+                    </a>
+                    {% endif %}
+                    {% if active_timer and active_timer.task_id == task.id and active_timer.is_running %}
+                    <a href="{% url 'timer_stop' %}" class="btn btn-sm btn-outline-danger btn-rounded">
+                        <i class="bi bi-stop-fill me-1"></i>Stop Timer
+                    </a>
+                    {% else %}
+                    <a href="{% url 'timer_start' task.id %}" class="btn btn-sm btn-outline-success btn-rounded">
+                        <i class="bi bi-play-fill me-1"></i>Start Timer
+                    </a>
+                    {% endif %}
+                    {% if user.profile.role in 'admin,manager' or task.assigned_to == user %}
+                    <a href="{% url 'task_edit' task.id %}" class="btn btn-sm btn-outline-secondary btn-rounded">
+                        <i class="bi bi-pencil me-1"></i>Edit
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                {# -- Row 1: Status, Priority, Assignee, Deadline -- #}
+                {# -- Each field is shown with a color-coded badge (status: gray/blue/yellow/green/red; priority: red/yellow/blue/green). Assignee defaults to "Unassigned". Deadline turns red and shows a warning icon when overdue. -- #}
+                <div class="row g-4 mb-4">
+                    <div class="col-md-3">
+                        <small style="color:var(--text-muted);">Status</small>
+                        <div class="mt-1">
+                            {% if task.status == 'todo' %}<span class="badge badge-pill-custom" style="background:rgba(148,163,184,0.15);color:var(--text-secondary);">To Do</span>
+                            {% elif task.status == 'in_progress' %}<span class="badge badge-pill-custom" style="background:rgba(99,102,241,0.15);color:#A5B4FC;">In Progress</span>
+                            {% elif task.status == 'in_review' %}<span class="badge badge-pill-custom" style="background:rgba(245,158,11,0.15);color:#FCD34D;">In Review</span>
+                            {% elif task.status == 'done' %}<span class="badge badge-pill-custom" style="background:rgba(34,197,94,0.15);color:#86EFAC;">Done</span>
+                            {% elif task.status == 'blocked' %}<span class="badge badge-pill-custom" style="background:rgba(239,68,68,0.15);color:#FCA5A5;">Blocked</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <small style="color:var(--text-muted);">Priority</small>
+                        <div class="mt-1">
+                            {% if task.priority == 'urgent' %}<span class="badge badge-pill-custom" style="background:rgba(239,68,68,0.15);color:#FCA5A5;">Urgent</span>
+                            {% elif task.priority == 'high' %}<span class="badge badge-pill-custom" style="background:rgba(245,158,11,0.15);color:#FCD34D;">High</span>
+                            {% elif task.priority == 'medium' %}<span class="badge badge-pill-custom" style="background:rgba(99,102,241,0.15);color:#A5B4FC;">Medium</span>
+                            {% else %}<span class="badge badge-pill-custom" style="background:rgba(34,197,94,0.15);color:#86EFAC;">Low</span>{% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <small style="color:var(--text-muted);">Assignee</small>
+                        <div class="fw-semibold mt-1">
+                            {% if task.assigned_to %}{{ task.assigned_to.get_full_name|default:task.assigned_to.username }}{% else %}<span style="color:var(--text-muted);">Unassigned</span>{% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <small style="color:var(--text-muted);">Deadline</small>
+                        <div class="fw-semibold mt-1" {% if task.is_overdue %}style="color:var(--danger);"{% endif %}>
+                            {{ task.deadline|date:"d M Y"|default:'No deadline' }}
+                            {% if task.is_overdue %}<i class="bi bi-exclamation-triangle ms-1"></i>{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                {# -- Row 2: Estimated Hours, Logged Time, Progress bar -- #}
+                {# -- Shows estimated vs actual logged hours. Progress bar is colored green (>=100%), accent (>=50%), or warning (<50%). -- #}
+                <div class="row g-4 mb-4">
+                    <div class="col-md-4">
+                        <small style="color:var(--text-muted);">Estimated Hours</small>
+                        <div class="fw-semibold mt-1">{{ task.estimated_hours }}h</div>
+                    </div>
+                    <div class="col-md-4">
+                        <small style="color:var(--text-muted);">Logged Time</small>
+                        <div class="fw-semibold mt-1">{{ task.total_logged_hours }}h</div>
+                    </div>
+                    <div class="col-md-4">
+                        <small style="color:var(--text-muted);">Progress</small>
+                        <div class="d-flex align-items-center gap-2 mt-1">
+                            <div class="progress-custom flex-grow-1" style="height:8px;">
+                                <div class="progress-bar-custom" style="width:{{ task.progress_percent }}%;background:{% if task.progress_percent >= 100 %}var(--success){% elif task.progress_percent >= 50 %}var(--accent){% else %}var(--warning){% endif %};"></div>
+                            </div>
+                            <small class="fw-semibold">{{ task.progress_percent }}%</small>
+                        </div>
+                    </div>
+                </div>
+
+                {# -- Task description (optional) -- #}
+                {% if task.description %}
+                <div class="mb-3">
+                    <small style="color:var(--text-muted);">Description</small>
+                    <p class="mb-0 mt-1">{{ task.description|linebreaksbr }}</p>
+                </div>
+                {% endif %}
+
+                {# -- Completion note (shown when task is done) -- #}
+                {# -- Rendered in a green-tinted box with check icon, note text, completed-by user, and timestamp. -- #}
+                {% if task.completion_note %}
+                <div class="mt-4 p-3" style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.15);border-radius:var(--radius-md);">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="bi bi-check-circle-fill" style="color:var(--success);"></i>
+                        <span class="fw-semibold" style="font-size:0.85rem;">Completion Note</span>
+                    </div>
+                    <p class="mb-2" style="font-size:0.85rem;color:var(--text-secondary);">{{ task.completion_note|linebreaksbr }}</p>
+                    <div style="font-size:0.72rem;color:var(--text-muted);">
+                        <i class="bi bi-person me-1"></i>{{ task.completed_by.get_full_name|default:task.completed_by.username }}
+                        <span class="mx-2">·</span>
+                        <i class="bi bi-clock me-1"></i>{{ task.completed_at|date:"d M Y H:i"|default:"—" }}
+                    </div>
+                </div>
+                {% endif %}
+
+                {# -- Created by / Created at metadata -- #}
+                <div class="row g-3 mt-2">
+                    <div class="col-md-6">
+                        <small style="color:var(--text-muted);">Created by</small>
+                        <div>{{ task.created_by.get_full_name|default:task.created_by.username|default:'System' }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <small style="color:var(--text-muted);">Created at</small>
+                        <div>{{ task.created_at|date:"d M Y H:i" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# -- Section: Time entries table -- #}
+        {# -- Shows the last 20 time entries for this task in a table. Columns: User (full name), Start (datetime), End (datetime or "Running"), Duration (in minutes with badge), Description (truncated). Falls back to an empty-state component if no entries. -- #}
+        <div class="card glass-card mt-4">
+            <div class="card-header py-3 px-4">
+                <span class="fw-semibold"><i class="bi bi-stopwatch me-2" style="color:var(--info);"></i>Time Entries (last 20)</span>
+            </div>
+            <div class="card-body p-0">
+                {% if time_entries %}
+                <div class="table-responsive-custom">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr><th>User</th><th>Start</th><th>End</th><th>Duration</th><th>Description</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for e in time_entries %}
+                            <tr>
+                                <td>{{ e.user.get_full_name|default:e.user.username }}</td>
+                                <td><small>{{ e.start_time|date:"d M H:i" }}</small></td>
+                                <td><small>{{ e.end_time|date:"d M H:i"|default:'Running' }}</small></td>
+                                <td><span class="badge badge-pill-custom" style="background:rgba(148,163,184,0.15);color:var(--text-secondary);">{{ e.duration_minutes }}m</span></td>
+                                <td><small style="color:var(--text-muted);">{{ e.description|default:'--' }}</small></td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center py-3" style="color:var(--text-muted);">No time entries yet</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                {% include 'components/_empty_state.html' with icon='clock-history' title='No time entries' message='No time has been logged on this task yet.' %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# -- Right sidebar: Status update controls -- #}
+    {# -- A column of buttons, one per available status (from status_choices). Each button navigates to task_update_status with the chosen status as a GET param. The currently active status is highlighted. Status buttons include relevant icons (circle, repeat, eye, check, slash). -- #}
+    {# -- If the current user is the assignee and the task is not done/blocked, shows a "Mark as Done & Confirm" button linking to task_complete with a hint about adding a completion note. -- #}
+    <div class="col-lg-4">
+        <div class="card glass-card">
+            <div class="card-header py-3 px-4">
+                <span class="fw-semibold"><i class="bi bi-kanban me-2" style="color:var(--warning);"></i>Update Status</span>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-column gap-2">
+                    {% for skey, slabel in status_choices %}
+                    <a href="{% url 'task_update_status' task.id %}?status={{ skey }}"
+                       class="btn btn-sm d-block text-start btn-outline-secondary {% if task.status == skey %}active{% endif %}"
+                       style="{% if task.status == skey %}border-color:var(--accent);color:var(--accent-hover);{% endif %}">
+                        {% if skey == 'todo' %}<i class="bi bi-circle me-2"></i>
+                        {% elif skey == 'in_progress' %}<i class="bi bi-arrow-repeat me-2"></i>
+                        {% elif skey == 'in_review' %}<i class="bi bi-eye me-2"></i>
+                        {% elif skey == 'done' %}<i class="bi bi-check-circle me-2"></i>
+                        {% elif skey == 'blocked' %}<i class="bi bi-slash-circle me-2"></i>
+                        {% endif %}
+                        {{ slabel }}
+                    </a>
+                    {% endfor %}
+                </div>
+
+                {% if task.assigned_to == user and task.status != 'done' and task.status != 'blocked' %}
+                <hr style="border-color:var(--border-color);">
+                <a href="{% url 'task_complete' task.id %}" class="btn btn-success btn-rounded w-100">
+                    <i class="bi bi-check2-circle me-1"></i>Mark as Done & Confirm
+                </a>
+                <small style="color:var(--text-muted);display:block;text-align:center;margin-top:6px;font-size:0.7rem;">
+                    Add a completion note about your work
+                </small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

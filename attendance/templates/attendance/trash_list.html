@@ -1,0 +1,142 @@
+{# -- Page: Trash List -- #}
+{# -- Purpose: Displays soft-deleted (trashed) items grouped into three Bootstrap tab panes: Projects, Tasks, and Meetings. Each tab shows a table with item details (name, deletion timestamp, deleter) and action buttons for restore and permanent delete (admin/superuser only). Non-admin users see an informational alert explaining soft-deletion. Extends base.html. -- #}
+{% extends 'base.html' %}
+{% block title %}Trash — WorkPulse{% endblock %}
+{% block page_title %}Trash{% endblock %}
+{% block page_subtitle %}Recently deleted items — restore or permanently remove{% endblock %}
+
+{% block content %}
+{# -- Section: Trash tab navigation + Empty Trash button -- #}
+{# -- Bootstrap nav-tabs with three tabs: Projects, Tasks, and Meetings. Each tab shows a badge with the count of deleted items. Tabs use data-bs-toggle="tab" for client-side switching. -- #}
+{# -- If the user is admin/superuser, an "Empty Trash" button appears next to the tabs that permanently deletes ALL trashed items (with JS confirmation). -- #}
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <ul class="nav nav-tabs mb-0" id="trashTabs" role="tablist" style="border-bottom-color:var(--border-color);">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="projects-tab" data-bs-toggle="tab" data-bs-target="#projects-trash" type="button" role="tab" style="font-size:0.82rem;color:var(--text-muted);">
+                <i class="bi bi-folder me-1"></i>Projects {% if deleted_projects %}<span class="badge ms-1" style="background:var(--accent);font-size:0.55rem;">{{ deleted_projects|length }}</span>{% endif %}
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tasks-tab" data-bs-toggle="tab" data-bs-target="#tasks-trash" type="button" role="tab" style="font-size:0.82rem;color:var(--text-muted);">
+                <i class="bi bi-list-task me-1"></i>Tasks {% if deleted_tasks %}<span class="badge ms-1" style="background:var(--accent);font-size:0.55rem;">{{ deleted_tasks|length }}</span>{% endif %}
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="meetings-tab" data-bs-toggle="tab" data-bs-target="#meetings-trash" type="button" role="tab" style="font-size:0.82rem;color:var(--text-muted);">
+                <i class="bi bi-people me-1"></i>Meetings {% if deleted_meetings %}<span class="badge ms-1" style="background:var(--accent);font-size:0.55rem;">{{ deleted_meetings|length }}</span>{% endif %}
+            </button>
+        </li>
+    </ul>
+    {% if user.is_superuser or user.profile.role == 'admin' %}
+    <a href="{% url 'empty_trash' %}" class="btn btn-sm btn-rounded" style="background:rgba(239,68,68,0.1);color:#FCA5A5;border:1px solid rgba(239,68,68,0.15);padding:3px 14px;font-size:0.68rem;" onclick="return confirm('Permanently delete ALL items in trash? This cannot be undone.')"><i class="bi bi-trash3 me-1"></i>Empty Trash</a>
+    {% endif %}
+</div>
+
+<div class="tab-content">
+    
+    {# -- Tab pane: Deleted projects -- #}
+    {# -- Table columns: Name (with folder icon), Deleted At (formatted datetime), Deleted By (user full name), Actions (Restore button for all users; "Delete Forever" button for admin/superuser with JS confirmation). Empty state when no deleted projects. -- #}
+    <div class="tab-pane fade show active" id="projects-trash" role="tabpanel">
+        <div class="card glass-card">
+            <div class="card-body p-0">
+                <div class="table-responsive-custom">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Name</th><th>Deleted</th><th>Deleted By</th><th></th></tr></thead>
+                        <tbody>
+                            {% for p in deleted_projects %}
+                            <tr>
+                                <td style="font-size:0.82rem;"><i class="bi bi-folder me-2" style="color:#F87171;"></i>{{ p.name }}</td>
+                                <td style="font-size:0.72rem;color:#64748B;">{{ p.deleted_at|date:"d M Y H:i" }}</td>
+                                <td style="font-size:0.75rem;">{{ p.deleted_by.get_full_name|default:p.deleted_by.username }}</td>
+                                <td class="text-end">
+                                    <a href="{% url 'project_restore' p.id %}" class="btn btn-sm btn-rounded" style="background:rgba(52,211,153,0.1);color:#86EFAC;border:1px solid rgba(52,211,153,0.15);padding:3px 12px;font-size:0.68rem;"><i class="bi bi-arrow-counterclockwise me-1"></i>Restore</a>
+                                    {% if user.is_superuser or user.profile.role == 'admin' %}
+                                    <a href="{% url 'project_permanent_delete' p.id %}" class="btn btn-sm btn-rounded ms-1" style="background:rgba(239,68,68,0.1);color:#FCA5A5;border:1px solid rgba(239,68,68,0.15);padding:3px 12px;font-size:0.68rem;" onclick="return confirm('Permanently delete this project? This cannot be undone.')"><i class="bi bi-trash3 me-1"></i>Delete Forever</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="text-center py-5" style="color:#64748B;">No deleted projects</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    {# -- Tab pane: Deleted tasks -- #}
+    {# -- Table columns: Title (with task icon), Project (parent project name), Deleted At, Deleted By, Actions (Restore / Delete Forever). Empty state when no deleted tasks. -- #}
+    <div class="tab-pane fade" id="tasks-trash" role="tabpanel">
+        <div class="card glass-card">
+            <div class="card-body p-0">
+                <div class="table-responsive-custom">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Title</th><th>Project</th><th>Deleted</th><th>Deleted By</th><th></th></tr></thead>
+                        <tbody>
+                            {% for t in deleted_tasks %}
+                            <tr>
+                                <td style="font-size:0.82rem;"><i class="bi bi-list-task me-2" style="color:#F87171;"></i>{{ t.title }}</td>
+                                <td style="font-size:0.72rem;color:#94A3B8;">{{ t.project.name }}</td>
+                                <td style="font-size:0.72rem;color:#64748B;">{{ t.deleted_at|date:"d M Y H:i" }}</td>
+                                <td style="font-size:0.75rem;">{{ t.deleted_by.get_full_name|default:t.deleted_by.username }}</td>
+                                <td class="text-end">
+                                    <a href="{% url 'task_restore' t.id %}" class="btn btn-sm btn-rounded" style="background:rgba(52,211,153,0.1);color:#86EFAC;border:1px solid rgba(52,211,153,0.15);padding:3px 12px;font-size:0.68rem;"><i class="bi bi-arrow-counterclockwise me-1"></i>Restore</a>
+                                    {% if user.is_superuser or user.profile.role == 'admin' %}
+                                    <a href="{% url 'task_permanent_delete' t.id %}" class="btn btn-sm btn-rounded ms-1" style="background:rgba(239,68,68,0.1);color:#FCA5A5;border:1px solid rgba(239,68,68,0.15);padding:3px 12px;font-size:0.68rem;" onclick="return confirm('Permanently delete this task? This cannot be undone.')"><i class="bi bi-trash3 me-1"></i>Delete Forever</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center py-5" style="color:#64748B;">No deleted tasks</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    {# -- Tab pane: Deleted meetings -- #}
+    {# -- Table columns: Title (with people icon), Status (colored badge), Deleted At, Deleted By, Actions (Restore / Delete Forever). Empty state when no deleted meetings. -- #}
+    <div class="tab-pane fade" id="meetings-trash" role="tabpanel">
+        <div class="card glass-card">
+            <div class="card-body p-0">
+                <div class="table-responsive-custom">
+                    <table class="table table-hover mb-0">
+                        <thead><tr><th>Title</th><th>Status</th><th>Deleted</th><th>Deleted By</th><th></th></tr></thead>
+                        <tbody>
+                            {% for m in deleted_meetings %}
+                            <tr>
+                                <td style="font-size:0.82rem;"><i class="bi bi-people me-2" style="color:#F87171;"></i>{{ m.title }}</td>
+                                <td><span class="badge" style="background:rgba(239,68,68,0.1);color:#FCA5A5;font-size:0.65rem;">{{ m.status }}</span></td>
+                                <td style="font-size:0.72rem;color:#64748B;">{{ m.deleted_at|date:"d M Y H:i" }}</td>
+                                <td style="font-size:0.75rem;">{{ m.deleted_by.get_full_name|default:m.deleted_by.username }}</td>
+                                <td class="text-end">
+                                    <a href="{% url 'meeting_restore' m.id %}" class="btn btn-sm btn-rounded" style="background:rgba(52,211,153,0.1);color:#86EFAC;border:1px solid rgba(52,211,153,0.15);padding:3px 12px;font-size:0.68rem;"><i class="bi bi-arrow-counterclockwise me-1"></i>Restore</a>
+                                    {% if user.is_superuser or user.profile.role == 'admin' %}
+                                    <a href="{% url 'meeting_permanent_delete' m.id %}" class="btn btn-sm btn-rounded ms-1" style="background:rgba(239,68,68,0.1);color:#FCA5A5;border:1px solid rgba(239,68,68,0.15);padding:3px 12px;font-size:0.68rem;" onclick="return confirm('Permanently delete this meeting? This cannot be undone.')"><i class="bi bi-trash3 me-1"></i>Delete Forever</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="5" class="text-center py-5" style="color:#64748B;">No deleted meetings</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# -- Section: Non-admin info alert -- #}
+{# -- Shown when the current user is not an admin or superuser. Explains that trashed items are soft-deleted and restorable, and that permanent deletion requires contacting an administrator. -- #}
+{% if not user.is_superuser and user.profile.role != 'admin' %}
+<div class="alert mt-4" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.12);border-radius:var(--radius-md);color:#FCA5A5;font-size:0.78rem;">
+    <i class="bi bi-info-circle me-2"></i>Deleted items are soft-deleted and can be restored. To permanently remove items, please contact an administrator.
+</div>
+{% endif %}
+{% endblock %}

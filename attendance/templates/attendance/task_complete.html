@@ -1,0 +1,63 @@
+{# -- Page: Task Completion -- #}
+{# -- Purpose: Confirmation page for marking a task as done. Displays a summary of the task (project, priority, deadline) and requires the user to provide a completion note describing what was accomplished. Submits via POST to the current URL. Extends base.html. -- #}
+{% extends 'base.html' %}
+{% block title %}Complete Task — WorkPulse{% endblock %}
+{% block page_title %}Complete Task{% endblock %}
+{% block page_subtitle %}Confirm completion and log your work{% endblock %}
+{% block content %}
+{# -- Section: Centered task completion form -- #}
+{# -- Wrapped in .row.justify-content-center / .col-lg-6 for a narrow centered layout. -- #}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card glass-card">
+            {# -- Card header with green check icon and task title -- #}
+            <div class="card-header py-3 px-4 d-flex align-items-center gap-2">
+                <i class="bi bi-check2-circle" style="color:var(--success);font-size:1.2rem;"></i>
+                <span>{{ task.title }}</span>
+            </div>
+            <div class="card-body p-4">
+                {# -- Section: Task summary information -- #}
+                {# -- Displays three read-only fields: Project name, Priority (with color-coded badge), and Deadline (highlighted red if overdue). -- #}
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <small style="color:var(--text-muted);">Project</small>
+                        <span style="font-size:0.85rem;">{{ task.project.name }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <small style="color:var(--text-muted);">Priority</small>
+                        <span class="badge badge-pill-custom {% if task.priority == 'urgent' %}" style="background:rgba(239,68,68,0.15);color:#FCA5A5;{% elif task.priority == 'high' %}" style="background:rgba(245,158,11,0.15);color:#FCD34D;{% elif task.priority == 'medium' %}" style="background:rgba(99,102,241,0.15);color:#A5B4FC;{% else %}" style="background:rgba(148,163,184,0.15);color:var(--text-secondary);{% endif %}>{{ task.get_priority_display }}</span>
+                    </div>
+                    {% if task.deadline %}
+                    <div class="d-flex justify-content-between mb-1">
+                        <small style="color:var(--text-muted);">Deadline</small>
+                        <span style="font-size:0.85rem;{% if task.is_overdue %}color:var(--danger);{% endif %}">{{ task.deadline|date:"d M Y" }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {# -- Section: Completion note form -- #}
+                {# -- POST form with a single textarea for the completion note. The note describes what was accomplished, challenges faced, and key outcomes. A hint informs the user the note is visible to managers/admins. -- #}
+                <form method="POST">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" style="font-size:0.85rem;">
+                            <i class="bi bi-pencil-square me-1" style="color:var(--accent);"></i>What did you do?
+                        </label>
+                        <textarea name="completion_note" rows="6" class="form-control"
+                                  placeholder="Describe what was accomplished, any challenges faced, and key outcomes..."
+                                  required style="resize:vertical;"></textarea>
+                        <small style="color:var(--text-muted);">This note will be visible to managers and admins.</small>
+                    </div>
+                    {# -- Form action buttons: Confirm Completion (green submit) and Cancel (links back to task_detail) -- #}
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success btn-rounded">
+                            <i class="bi bi-check-lg me-1"></i>Confirm Completion
+                        </button>
+                        <a href="{% url 'task_detail' task.id %}" class="btn btn-outline-secondary btn-rounded">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

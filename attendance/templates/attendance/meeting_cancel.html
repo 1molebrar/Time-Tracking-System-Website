@@ -1,0 +1,42 @@
+{# -- Page: Cancel Meeting -- #}
+{# -- Renders a confirmation prompt before cancelling a meeting. Extends the base layout and #}
+{# -- overrides title/page_title/page_subtitle blocks. Displays the meeting title, date, and #}
+{# -- time range so the user knows exactly which meeting they are cancelling. On POST, the form #}
+{# -- submits to the current URL (handled by the view). The "Go Back" link returns to the meeting #}
+{# -- detail page without cancelling. Only accessible to users with the proper permission. -- #}
+{% extends 'base.html' %}
+{% block title %}Cancel Meeting — WorkPulse{% endblock %}
+{# -- Page header: shows meeting title as subtitle for context -- #}
+{% block page_title %}Cancel Meeting{% endblock %}
+{% block page_subtitle %}{{ meeting.title }}{% endblock %}
+
+{# -- Main content: centered confirmation card with danger styling -- #}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        {# -- Card with red border to signal destructive action -- #}
+        <div class="card glass-card border-danger">
+            {# -- Card header with danger-coloured background and icon -- #}
+            <div class="card-header" style="background:rgba(239,68,68,0.08);color:var(--danger);border-bottom:1px solid rgba(239,68,68,0.15);">
+                <i class="bi bi-x-circle me-1"></i> Confirm Cancellation
+            </div>
+            <div class="card-body text-center py-4">
+                {# -- Large warning icon for visual emphasis -- #}
+                <i class="bi bi-calendar-x" style="font-size:3.5rem;color:var(--danger);"></i>
+                <h5 class="mt-3">Cancel this meeting?</h5>
+                {# -- Meeting details (title, date, time range) shown for confirmation context -- #}
+                <p class="text-muted">{{ meeting.title }}<br><small>{{ meeting.date|date:"d M Y" }} · {{ meeting.start_time|time:"H:i" }} — {{ meeting.end_time|time:"H:i" }}</small></p>
+                {# -- POST form submits to the cancel endpoint; no action attr needed since it posts to current URL -- #}
+                <form method="POST">
+                    {% csrf_token %}
+                    {# -- Button group: destructive submit vs safe navigation back -- #}
+                    <div class="d-flex justify-content-center gap-2 mt-3">
+                        <button type="submit" class="btn btn-danger btn-rounded"><i class="bi bi-x-circle me-1"></i>Yes, Cancel</button>
+                        <a href="{% url 'meeting_detail' meeting.id %}" class="btn btn-outline-secondary btn-rounded">Go Back</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

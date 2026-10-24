@@ -1,0 +1,271 @@
+{# -- Page: Meeting List -- #}
+{# -- Displays all meetings grouped into three sections: Live Now (ongoing), Upcoming (scheduled), #}
+{# -- and Past (completed/missed/cancelled). Each section shows meeting cards with type icon, title, #}
+{# -- status badge, time info, participant count, and action buttons. Admin/manager users get extra #}
+{# -- controls (edit, mark important, cancel). Shows a count summary in the toolbar and provides #}
+{# -- links to the archive page and create-new-meeting form. Falls back to an empty state if no #}
+{# -- meetings exist in any category. -- #}
+{% extends 'base.html' %}
+{% block title %}Meetings — WorkPulse{% endblock %}
+{% block page_title %}Meetings{% endblock %}
+{% block page_subtitle %}Schedule, join & manage meetings{% endblock %}
+
+{# -- Inline styles for meeting cards, status badges, pulse animation, and type icons -- #}
+{% block extra_head %}
+<style>
+.meeting-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); transition: all 0.25s ease; overflow: hidden; }
+.meeting-card:hover { border-color: rgba(99,102,241,0.2); box-shadow: 0 4px 20px rgba(0,0,0,0.2); transform: translateY(-2px); }
+.meeting-card .card-header-custom { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 12px; }
+.meeting-card .card-body-custom { padding: 16px 20px; }
+.section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.section-header h5 { margin: 0; font-size: 0.95rem; font-weight: 700; }
+.status-badge { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 3px 10px; border-radius: 50px; }
+.status-scheduled { background: rgba(59,130,246,0.15); color: #93C5FD; }
+.status-ongoing { background: rgba(34,197,94,0.15); color: #86EFAC; }
+.status-completed { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+.status-missed { background: rgba(239,68,68,0.15); color: #FCA5A5; }
+.status-cancelled { background: rgba(148,163,184,0.08); color: rgba(148,163,184,0.4); }
+.live-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--success); margin-right: 6px; animation: pulse 1.5s ease-in-out infinite; box-shadow: 0 0 12px rgba(34,197,94,0.4); }
+@keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.3); } 100% { opacity: 1; transform: scale(1); } }
+.meeting-type-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.1rem; }
+.meeting-time { font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+.meeting-time strong { color: var(--text-primary); font-size: 0.85rem; }
+.countdown { font-size: 0.72rem; color: var(--accent-hover); font-weight: 600; }
+.live-now { font-size: 0.72rem; color: var(--success); font-weight: 600; }
+.started-ago { font-size: 0.72rem; color: var(--text-muted); }
+.missed-card { opacity: 0.55; }
+.missed-card:hover { opacity: 0.8; }
+.important-star { color: #FCD34D; font-size: 0.85rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+{# -- TOOLBAR: summary counts (live/upcoming/past), archive link, and create-new button (admin/manager only) -- #}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+    {# -- Summary line: displays counts of live, upcoming, and past meetings -- #}
+    <p class="mb-0" style="color:var(--text-muted);font-size:0.85rem;">
+        {{ live_meetings|length }} live · {{ upcoming_meetings|length }} upcoming · {{ past_meetings|length }} past
+    </p>
+    <div class="d-flex gap-2">
+        <a href="{% url 'meeting_archive' %}" class="btn btn-sm btn-outline-secondary btn-rounded">
+            <i class="bi bi-archive me-1"></i>Archive
+        </a>
+        {% if user.profile.role in 'admin,manager' %}
+        <a href="{% url 'meeting_create' %}" class="btn btn-primary btn-rounded btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>New Meeting
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+{# -- SECTION: Live (ongoing) meetings — each card gets a green border accent, pulse dot, #}
+{# -- "Join Now" button, and shows elapsed time since start. -- #}
+{% if live_meetings %}
+<div class="section-header">
+    {# -- Section header with animated pulse icon and count badge -- #}
+    <span class="live-pulse"></span>
+    <h5 style="color:var(--success);">Live Now</h5>
+    <span class="badge" style="background:rgba(34,197,94,0.15);color:#86EFAC;font-size:0.6rem;">{{ live_meetings|length }}</span>
+</div>
+<div class="row g-3 mb-4">
+    {% for m in live_meetings %}
+    <div class="col-xl-4 col-md-6">
+        {# -- Live meeting card: green border, type icon, title with important star, #}
+        {# -- "Live" badge with pulse, time/duration, organizer, participant counts, #}
+        {# -- and prominent "Join Now" button -- #}
+        <div class="meeting-card h-100" style="border-color:rgba(34,197,94,0.25);">
+            <div class="card-header-custom">
+                <div class="meeting-type-icon" style="background:rgba(34,197,94,0.12);color:var(--success);">
+                    <i class="bi {{ m.meeting_type_icon }}"></i>
+                </div>
+                <div class="flex-grow-1 min-width-0">
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="{% url 'meeting_detail' m.id %}" class="fw-semibold text-decoration-none text-truncate" style="font-size:0.88rem;color:var(--text-primary);">{{ m.title }}</a>
+                        {% if m.is_important %}<i class="bi bi-star-fill important-star"></i>{% endif %}
+                    </div>
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        <span class="status-badge status-ongoing"><span class="live-pulse" style="width:5px;height:5px;"></span>Live</span>
+                        <span class="started-ago"><i class="bi bi-clock me-1"></i>Started {{ m.minutes_since_start }} min ago</span>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body-custom">
+                <div class="d-flex flex-wrap gap-3 mb-2">
+                    <span class="meeting-time"><i class="bi bi-calendar3"></i>{{ m.date|date:"d M" }}</span>
+                    <span class="meeting-time"><i class="bi bi-clock"></i>{{ m.start_time|time:"H:i" }} — {{ m.end_time|time:"H:i" }}</span>
+                    <span class="meeting-time"><i class="bi bi-hourglass"></i>{{ m.duration_minutes }}m</span>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                    <small style="font-size:0.65rem;color:var(--text-muted);"><i class="bi bi-person me-1"></i>{{ m.created_by.get_full_name|default:m.created_by.username }}</small>
+                    <small style="font-size:0.65rem;color:var(--text-muted);"><i class="bi bi-people me-1"></i>{{ m.participant_count }} invited · {{ m.attendee_count }} joined</small>
+                </div>
+                <div class="d-flex gap-2 mt-3">
+                    <a href="{% url 'meeting_join' m.id %}" class="btn btn-sm px-3" style="background:var(--success);color:#fff;border-radius:50px;font-weight:600;font-size:0.75rem;">
+                        <i class="bi bi-camera-video me-1"></i>Join Now
+                    </a>
+                    <a href="{% url 'meeting_detail' m.id %}" class="btn btn-sm btn-outline-secondary px-3" style="border-radius:50px;font-size:0.75rem;">Details</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# -- SECTION: Upcoming (scheduled) meetings — show scheduled badge, "Today" label if applicable, #}
+{# -- countdown for meetings starting within 60 min, truncated description, and action buttons #}
+{# -- (join if today/within 15min, details, dropdown with edit/mark-important/cancel for admin/manager). -- #}
+{% if upcoming_meetings %}
+<div class="section-header">
+    {# -- Section header with calendar icon and count badge -- #}
+    <i class="bi bi-calendar-event" style="color:var(--accent);font-size:1.1rem;"></i>
+    <h5>Upcoming Meetings</h5>
+    <span class="badge" style="background:rgba(99,102,241,0.15);color:#A5B4FC;font-size:0.6rem;">{{ upcoming_meetings|length }}</span>
+</div>
+<div class="row g-3 mb-4">
+    {% for m in upcoming_meetings %}
+    <div class="col-xl-4 col-md-6">
+        {# -- Upcoming meeting card: type icon, title, scheduled badge, "Today" label if applicable, #}
+        {# -- countdown timer for meetings starting within 60 min, description (truncated to 15 words), #}
+        {# -- date/time/duration, organizer, participant count. Admin/manager see a dropdown with #}
+        {# -- edit/toggle-important/cancel actions. Join button appears if meeting is today or within 15 min. -- #}
+        <div class="meeting-card h-100">
+            <div class="card-header-custom">
+                <div class="meeting-type-icon" style="background:rgba(99,102,241,0.12);color:var(--accent-hover);">
+                    <i class="bi {{ m.meeting_type_icon }}"></i>
+                </div>
+                <div class="flex-grow-1 min-width-0">
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="{% url 'meeting_detail' m.id %}" class="fw-semibold text-decoration-none text-truncate" style="font-size:0.88rem;color:var(--text-primary);">{{ m.title }}</a>
+                        {% if m.is_important %}<i class="bi bi-star-fill important-star"></i>{% endif %}
+                    </div>
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        <span class="status-badge status-scheduled">Scheduled</span>
+                        {% if m.is_today %}<span class="badge" style="background:rgba(99,102,241,0.12);color:#A5B4FC;font-size:0.55rem;">Today</span>{% endif %}
+                        {% if m.minutes_until_start > 0 and m.minutes_until_start <= 60 %}
+                        <span class="countdown"><i class="bi bi-hourglass-split me-1"></i>{{ m.minutes_until_start }} min</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="card-body-custom">
+                {% if m.description %}
+                <p class="mb-2" style="font-size:0.78rem;color:var(--text-muted);">{{ m.description|truncatewords:15 }}</p>
+                {% endif %}
+                <div class="d-flex flex-wrap gap-3 mb-2">
+                    <span class="meeting-time"><i class="bi bi-calendar3"></i>{{ m.date|date:"D, d M" }}</span>
+                    <span class="meeting-time"><i class="bi bi-clock"></i>{{ m.start_time|time:"H:i" }} — {{ m.end_time|time:"H:i" }}</span>
+                    <span class="meeting-time"><i class="bi bi-hourglass"></i>{{ m.duration_minutes }}m</span>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                    <small style="font-size:0.65rem;color:var(--text-muted);"><i class="bi bi-person me-1"></i>{{ m.created_by.get_full_name|default:m.created_by.username }}</small>
+                    <small style="font-size:0.65rem;color:var(--text-muted);"><i class="bi bi-people me-1"></i>{{ m.participant_count }} participants</small>
+                </div>
+                <div class="d-flex gap-2 mt-3">
+                    {% if m.is_today or m.minutes_until_start <= 15 %}
+                    <a href="{% url 'meeting_join' m.id %}" class="btn btn-sm px-3" style="background:var(--accent);color:#fff;border-radius:50px;font-weight:600;font-size:0.75rem;">
+                        <i class="bi bi-camera-video me-1"></i>Join
+                    </a>
+                    {% endif %}
+                    <a href="{% url 'meeting_detail' m.id %}" class="btn btn-sm btn-outline-secondary px-3" style="border-radius:50px;font-size:0.75rem;">Details</a>
+                    {% if user.profile.role in 'admin,manager' %}
+                    {# -- Admin/manager dropdown: edit, toggle important, and cancel meeting -- #}
+                    <div class="dropdown d-inline-block">
+                        <button class="btn btn-sm btn-outline-secondary" style="border-radius:50px;padding:4px 10px;font-size:0.7rem;" data-bs-toggle="dropdown"><i class="bi bi-three-dots"></i></button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{% url 'meeting_edit' m.id %}"><i class="bi bi-pencil me-2"></i>Edit</a></li>
+                            <li><a class="dropdown-item" href="{% url 'meeting_toggle_important' m.id %}"><i class="bi bi-star me-2"></i>{% if m.is_important %}Unmark{% else %}Mark{% endif %} Important</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="{% url 'meeting_cancel' m.id %}"><i class="bi bi-x-circle me-2"></i>Cancel Meeting</a></li>
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">{% include 'components/_empty_state.html' with icon='calendar-check' title='No upcoming meetings' message='No upcoming meetings scheduled.' %}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# -- SECTION: Past meetings (completed, missed, cancelled) — grouped together with distinct status badges. #}
+{# -- Missed meetings render with reduced opacity (missed-card class). Past cards show details link #}
+{# -- (or "View Notes" if notes exist) and an add/edit-notes button for admin/manager. -- #}
+{% if past_meetings %}
+<div class="section-header">
+    {# -- Section header with clock icon and count badge -- #}
+    <i class="bi bi-clock-history" style="color:var(--text-muted);font-size:1.1rem;"></i>
+    <h5>Past Meetings</h5>
+    <span class="badge" style="background:rgba(148,163,184,0.15);color:var(--text-secondary);font-size:0.6rem;">{{ past_meetings|length }}</span>
+</div>
+<div class="row g-3">
+    {% for m in past_meetings %}
+    <div class="col-xl-4 col-md-6">
+        {# -- Past meeting card: type-icon colour varies by status (completed/missed/cancelled). #}
+        {# -- Missed cards get reduced opacity. Status badge shows Completed/Missed/Cancelled with #}
+        {# -- attendee count for completed meetings. Card footer provides "View Notes" or "Details" #}
+        {# -- link, plus an add/edit notes button for admin/manager. -- #}
+        <div class="meeting-card h-100 {% if m.status == 'missed' %}missed-card{% endif %}">
+            <div class="card-header-custom">
+                <div class="meeting-type-icon" style="background:{% if m.status == 'completed' %}rgba(148,163,184,0.1){% elif m.status == 'missed' %}rgba(239,68,68,0.1){% else %}rgba(148,163,184,0.05){% endif %};color:{% if m.status == 'completed' %}var(--text-muted){% elif m.status == 'missed' %}#FCA5A5{% else %}rgba(148,163,184,0.4){% endif %};">
+                    <i class="bi {{ m.meeting_type_icon }}"></i>
+                </div>
+                <div class="flex-grow-1 min-width-0">
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="{% url 'meeting_detail' m.id %}" class="fw-semibold text-decoration-none text-truncate" style="font-size:0.88rem;color:var(--text-primary);">{{ m.title }}</a>
+                        {% if m.is_important %}<i class="bi bi-star-fill important-star"></i>{% endif %}
+                    </div>
+                    <div class="d-flex align-items-center gap-2 mt-1">
+                        {% if m.status == 'completed' %}
+                        <span class="status-badge status-completed">Completed</span>
+                        {% if m.attendee_count > 0 %}<small style="font-size:0.6rem;color:var(--text-muted);">{{ m.attendee_count }} attended</small>{% endif %}
+                        {% elif m.status == 'missed' %}
+                        <span class="status-badge status-missed">Missed</span>
+                        <small style="font-size:0.6rem;color:#FCA5A5;">No attendees</small>
+                        {% elif m.status == 'cancelled' %}
+                        <span class="status-badge status-cancelled">Cancelled</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="card-body-custom">
+                <div class="d-flex flex-wrap gap-3 mb-2">
+                    <span class="meeting-time"><i class="bi bi-calendar3"></i>{{ m.date|date:"D, d M" }}</span>
+                    <span class="meeting-time"><i class="bi bi-clock"></i>{{ m.start_time|time:"H:i" }}</span>
+                    <span class="meeting-time"><i class="bi bi-hourglass"></i>{{ m.duration_minutes }}m</span>
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                    <small style="font-size:0.65rem;color:var(--text-muted);"><i class="bi bi-person me-1"></i>{{ m.created_by.get_full_name|default:m.created_by.username }}</small>
+                    <small style="font-size:0.65rem;color:var(--text-muted);"><i class="bi bi-people me-1"></i>{{ m.participant_count }} participants</small>
+                </div>
+                <div class="d-flex gap-2 mt-3">
+                    <a href="{% url 'meeting_detail' m.id %}" class="btn btn-sm btn-outline-secondary px-3" style="border-radius:50px;font-size:0.75rem;">
+                        {% if m.notes %}View Notes{% else %}Details{% endif %}
+                    </a>
+                    {% if user.profile.role in 'admin,manager' %}
+                    <a href="{% url 'meeting_add_notes' m.id %}" class="btn btn-sm btn-outline-secondary px-3" style="border-radius:50px;font-size:0.75rem;">
+                        <i class="bi bi-journal-text me-1"></i>{% if m.notes %}Edit Notes{% else %}Add Notes{% endif %}
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">{% include 'components/_empty_state.html' with icon='calendar-x' title='No past meetings' message='No past meetings recorded.' %}</div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# -- Fallback empty state: shown only when all three meeting lists are empty. #}
+{# -- Admin/manager users get a "Schedule a Meeting" call-to-action button. -- #}
+{% if not live_meetings and not upcoming_meetings and not past_meetings %}
+    {% if user.profile.role in 'admin,manager' %}
+        {% url 'meeting_create' as meeting_create_url %}
+    {% endif %}
+    {% include 'components/_empty_state.html' with icon='calendar-plus' title='No meetings found' message='No meetings have been scheduled.' action_url=meeting_create_url action_text='Schedule a Meeting' %}
+{% endif %}
+
+{% endblock %}

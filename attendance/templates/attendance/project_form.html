@@ -1,0 +1,64 @@
+{# -- Page: Project Add/Edit Form -- #}
+{# -- Dual-purpose form for creating or editing a project. Uses the `project` object's presence to #}
+{# -- distinguish between create (None) and edit (populated) modes. Fields: name (required), #}
+{# -- description (optional textarea), client (dropdown from clients list, with "-- No client --" #}
+{# -- default), and status (Active/Completed/Archived). POSTs to current URL; Cancel returns to #}
+{# -- the project list. -- #}
+{% extends 'base.html' %}
+{% block title %}{% if project %}Edit{% else %}Add{% endif %} Project — WorkPulse{% endblock %}
+{% block page_title %}{% if project %}Edit Project{% else %}New Project{% endif %}{% endblock %}
+{% block page_subtitle %}{% if project %}Update project details{% else %}Create a new project{% endif %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card glass-card p-4">
+            <form method="POST">
+                {% csrf_token %}
+
+                {# -- Field: Project name (required) -- #}
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Project Name *</label>
+                    <input type="text" name="name" class="form-control" value="{{ project.name|default:'' }}" required>
+                </div>
+
+                {# -- Field: Description (optional textarea) -- #}
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Description</label>
+                    <textarea name="description" class="form-control" rows="3">{{ project.description|default:'' }}</textarea>
+                </div>
+
+                {# -- Field group: Client (dropdown) and Status (dropdown) in a 2-column row -- #}
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        {# -- Client selector: populated from the clients context variable, with an #}
+                        {# -- empty "No client" option. Pre-selects existing client_id when editing. -- #}
+                        <label class="form-label small fw-semibold">Client</label>
+                        <select name="client" class="form-select">
+                            <option value="">— No client —</option>
+                            {% for c in clients %}
+                            <option value="{{ c.id }}" {% if project and project.client_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        {# -- Status selector: Active, Completed, or Archived. Defaults to Active on create. -- #}
+                        <label class="form-label small fw-semibold">Status</label>
+                        <select name="status" class="form-select">
+                            <option value="active" {% if project and project.status == 'active' %}selected{% endif %}>Active</option>
+                            <option value="completed" {% if project and project.status == 'completed' %}selected{% endif %}>Completed</option>
+                            <option value="archived" {% if project and project.status == 'archived' %}selected{% endif %}>Archived</option>
+                        </select>
+                    </div>
+                </div>
+
+                {# -- Action buttons: primary submit (Create/Update) and Cancel link back to project list -- #}
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-rounded">{% if project %}Update{% else %}Create{% endif %} Project</button>
+                    <a href="{% url 'project_list' %}" class="btn btn-outline-secondary btn-rounded">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

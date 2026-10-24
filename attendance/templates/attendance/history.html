@@ -1,0 +1,81 @@
+{# -- Page: Attendance History -- #}
+{# Lists all attendance records for the currently logged-in user. #}
+{# Shows check-in/check-out times, total hours, breaks, and status badges. #}
+{% extends 'base.html' %}
+{% block title %}Attendance History{% endblock %}
+
+{% block content %}
+{# -- Section: Attendance History Table -- #}
+{# Heading row with page title and the user's full name (or username) as subtitle. #}
+<div class="row mb-4">
+    <div class="col">
+        <h2><i class="bi bi-clock-history me-2"></i>Attendance History</h2>
+        <p class="text-muted">{{ user.get_full_name|default:user.username }}</p>
+    </div>
+</div>
+
+<div class="card glass-card">
+    <div class="card-body p-0">
+        <div class="table-responsive-custom">
+            {# -- Attendance Table -- #}
+            {# Columns: # (row counter), Date, Check In time (HH:mm:ss or --), Check Out time (HH:mm:ss or --), #}
+            {# Total Hours (decimal format), Breaks (count badge or -- if none), #}
+            {# Status: Late (red badge), Overtime (OT badge with minutes), Active (still clocked in, yellow), #}
+            {# or On Time (green badge when checked out, not late, no overtime). #}
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Date</th>
+                        <th>Check In</th>
+                        <th>Check Out</th>
+                        <th>Total Hours</th>
+                        <th>Breaks</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in attendances %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ a.date }}</td>
+                        <td>{{ a.check_in|date:"H:i:s"|default:"--" }}</td>
+                        <td>{{ a.check_out|date:"H:i:s"|default:"--" }}</td>
+                        <td>{{ a.total_hours|floatformat:2 }}h</td>
+                        <td>
+                            {% with break_count=a.breaks.all.count %}
+                                {% if break_count > 0 %}
+                                <span class="badge bg-info text-dark">{{ break_count }} break{{ break_count|pluralize }}</span>
+                                {% else %}
+                                <span class="text-muted">--</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td>
+                            {% if a.is_late %}<span class="late-badge">Late</span>{% endif %}
+                            {% if a.overtime_minutes > 0 %}<span class="overtime-badge">{{ a.overtime_minutes }}m OT</span>{% endif %}
+                            {% if not a.check_out %}<span class="badge bg-warning text-dark">Active</span>{% endif %}
+                            {% if a.check_out and not a.is_late and a.overtime_minutes == 0 %}<span class="badge bg-success">On Time</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                            <p class="mt-2">No attendance records found.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    {# Back link to the employee dashboard for easy navigation #}
+    <a href="{% url 'employee_dashboard' %}" class="btn btn-outline-primary">
+        <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+    </a>
+</div>
+{% endblock %}

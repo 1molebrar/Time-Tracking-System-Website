@@ -1,0 +1,52 @@
+{# -- Page: Meeting Archive -- #}
+{# Lists meetings that have been completed (ended 24+ hours ago) for historical reference. #}
+{# Shows a count header with a "Back to Meetings" link to the active meetings list. #}
+{# Falls back to an empty state component when no archived meetings exist. #}
+{% extends 'base.html' %}
+{% block title %}Meeting Archive — WorkPulse{% endblock %}
+{% block page_title %}Meeting Archive{% endblock %}
+{% block page_subtitle %}Completed meetings from 24+ hours ago{% endblock %}
+{% block content %}
+<div class="card glass-card p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        {# Dynamic count with "archived meeting(s)" label #}
+        <p class="mb-0" style="color:var(--text-muted);font-size:0.85rem;">{{ meetings|length }} archived meeting(s)</p>
+        <a href="{% url 'meeting_list' %}" class="btn btn-outline-secondary btn-sm btn-rounded"><i class="bi bi-arrow-left me-1"></i>Back to Meetings</a>
+    </div>
+    {% if meetings %}
+    <div class="table-responsive-custom">
+        {# -- Archived Meetings Table -- #}
+        {# Columns: Title (linked to meeting detail), Date (d M Y format), Time (H:i), #}
+        {# Duration (in minutes), Type (meeting category label), Participants (total count), #}
+        {# Attended (count of attendees who joined), Organizer (creator's full name), #}
+        {# Action (View button linking to meeting detail). #}
+        <table class="table table-hover">
+            <thead>
+                <tr><th>Title</th><th>Date</th><th>Time</th><th>Duration</th><th>Type</th><th>Participants</th><th>Attended</th><th>Organizer</th><th></th></tr>
+            </thead>
+            <tbody>
+                {% for m in meetings %}
+                <tr>
+                    <td class="fw-semibold" style="font-size:0.85rem;">
+                        <a href="{% url 'meeting_detail' m.id %}" class="text-decoration-none" style="color:var(--text-primary);">{{ m.title }}</a>
+                    </td>
+                    <td><small style="color:var(--text-muted);">{{ m.date|date:"d M Y" }}</small></td>
+                    <td><small style="color:var(--text-muted);">{{ m.start_time|time:"H:i" }}</small></td>
+                    <td><small style="color:var(--text-muted);">{{ m.duration_minutes }}m</small></td>
+                    <td><small style="color:var(--text-muted);">{{ m.get_meeting_type_display }}</small></td>
+                    <td><small style="color:var(--text-muted);">{{ m.participant_count }}</small></td>
+                    <td><small style="color:var(--success);">{{ m.attendee_count }}</small></td>
+                    <td><small style="color:var(--text-muted);">{{ m.created_by.get_full_name|default:m.created_by.username }}</small></td>
+                    <td class="text-end">
+                        <a href="{% url 'meeting_detail' m.id %}" class="btn btn-sm btn-outline-secondary" style="padding:2px 10px;font-size:0.7rem;">View</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    {% include 'components/_empty_state.html' with icon='archive' title='No archived meetings' message='Completed meetings will appear here after 24 hours.' %}
+    {% endif %}
+</div>
+{% endblock %}

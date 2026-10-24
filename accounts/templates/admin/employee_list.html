@@ -1,0 +1,104 @@
+{# -- Page: Employee List -- #}
+{# Shows two tables: Active Users and Inactive Users. Each row represents #}
+{# a single employee user account. Active users have Edit (pencil) and     #}
+{# Deactivate (person-x) action buttons. Inactive users have a Reactivate  #}
+{# (counterclockwise arrow) button. Managers cannot be deactivated.       #}
+{#                                                                         #}
+{# Active Users table columns:                                             #}
+{#   Username  — Login name (bold)                                        #}
+{#   Name      — Full name or '--'                                        #}
+{#   Email     — Email address or '--'                                    #}
+{#   Role      — Color-coded badge (manager = yellow, employee = indigo)  #}
+{#   Last Login — Date/time or 'Never'                                    #}
+{#   Actions   — Edit / Deactivate (hidden for managers)                   #}
+{#                                                                         #}
+{# Inactive Users table columns (same + Reason):                           #}
+{#   Reason    — Deactivation reason display or '--'                       #}
+{#   Actions   — Reactivate button only                                    #}
+{# ======================================================================= #}
+{% extends 'base.html' %}
+{% block title %}Employees — WorkPulse{% endblock %}
+{% block page_title %}Employees{% endblock %}
+{% block page_subtitle %}Manage all users{% endblock %}
+{% block content %}
+{# -- Summary bar: active/inactive counts + Add User button -- #}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <p style="color:var(--text-muted);margin-bottom:0;">{{ active_employees|length }} active · {{ inactive_employees|length }} inactive</p>
+    <a href="{% url 'employee_add' %}" class="btn btn-primary btn-sm btn-rounded"><i class="bi bi-plus-lg me-1"></i>Add User</a>
+</div>
+
+{# -- Active Users table -- #}
+<div class="card glass-card mb-4">
+    <div class="card-header py-3 px-4 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-person-check me-2" style="color:var(--success);"></i>Active Users</span>
+        <span class="badge" style="background:rgba(34,197,94,0.15);color:#86EFAC;">{{ active_employees|length }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive-custom">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Last Login</th><th></th></tr>
+                </thead>
+                <tbody>
+                    {% for emp in active_employees %}
+                    <tr>
+                        <td class="fw-semibold">{{ emp.username }}</td>
+                        <td>{{ emp.get_full_name|default:'--' }}</td>
+                        <td>{{ emp.email|default:'--' }}</td>
+                        <td><span class="badge badge-pill-custom {% if emp.profile.role == 'manager' %}" style="background:rgba(245,158,11,0.15);color:#FCD34D;"{% else %}" style="background:rgba(79,70,229,0.15);color:#A5B4FC;"{% endif %}>{{ emp.profile.get_role_display }}</span></td>
+                        <td><small style="color:var(--text-muted);">{{ emp.last_login|date:"Y-m-d H:i"|default:"Never" }}</small></td>
+                        <td class="text-end">
+                            {# -- Edit button -- #}
+                            <a href="{% url 'employee_edit' emp.id %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                            {# -- Deactivate button (not shown for managers) -- #}
+                            {% if emp.profile.role != 'manager' %}
+                            <a href="{% url 'employee_deactivate' emp.id %}" class="btn btn-sm btn-outline-warning"><i class="bi bi-person-x"></i></a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center py-4" style="color:var(--text-muted);">No active users.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{# -- Inactive Users table -- #}
+<div class="card glass-card">
+    <div class="card-header py-3 px-4 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-person-x me-2" style="color:var(--danger);"></i>Inactive Users</span>
+        <span class="badge" style="background:rgba(148,163,184,0.15);color:var(--text-secondary);">{{ inactive_employees|length }}</span>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive-custom">
+            <table class="table table-hover mb-0">
+                <thead>
+                    {# -- Extra column: Reason -- #}
+                    <tr><th>Username</th><th>Name</th><th>Email</th><th>Role</th><th>Reason</th><th>Last Login</th><th></th></tr>
+                </thead>
+                <tbody>
+                    {% for emp in inactive_employees %}
+                    {# -- Rows are dimmed (opacity 0.6) to visually distinguish inactive users -- #}
+                    <tr style="opacity:0.6;">
+                        <td class="fw-semibold" style="color:var(--text-muted);">{{ emp.username }}</td>
+                        <td style="color:var(--text-muted);">{{ emp.get_full_name|default:'--' }}</td>
+                        <td style="color:var(--text-muted);">{{ emp.email|default:'--' }}</td>
+                        <td><span class="badge badge-pill-custom" style="background:rgba(148,163,184,0.1);color:var(--text-muted);">{{ emp.profile.get_role_display }}</span></td>
+                        <td><small style="color:var(--text-muted);">{{ emp.profile.get_deactivation_reason_display|default:'--' }}</small></td>
+                        <td><small style="color:var(--text-muted);">{{ emp.last_login|date:"Y-m-d H:i"|default:"Never" }}</small></td>
+                        <td class="text-end">
+                            {# -- Reactivate button -- #}
+                            <a href="{% url 'employee_activate' emp.id %}" class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-counterclockwise"></i></a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center py-4" style="color:var(--text-muted);">No inactive users.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

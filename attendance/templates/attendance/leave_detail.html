@@ -1,0 +1,95 @@
+{# -- Page: Leave Request Detail -- #}
+{# Displays full details of a single leave request, including employee info, reason, attachment, #}
+{# review status, and (for managers) approve/reject action forms when the request is still pending. #}
+{% extends 'base.html' %}
+{% block title %}Leave Request Detail — WorkPulse{% endblock %}
+{% block page_title %}Leave Request{% endblock %}
+{% block page_subtitle %}{{ leave.employee.get_full_name|default:leave.employee.username }} — {{ leave.get_leave_type_display }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card glass-card p-4">
+            {# -- Header Section: leave type, employee info, status badge -- #}
+            {# Displays the leave type as a heading, then a stacked list showing employee name, email, #}
+            {# and the date range with total day count. The status badge uses dynamic styling from #}
+            {# leave.status_badge (e.g. green for approved, red for rejected, yellow for pending). #}
+            <div class="d-flex justify-content-between align-items-start mb-4">
+                <div>
+                    <h5 style="color:#F1F5F9;font-size:1rem;">{{ leave.get_leave_type_display }}</h5>
+                    <p style="color:#64748B;font-size:0.82rem;margin:0;">
+                        <i class="bi bi-person me-1"></i>{{ leave.employee.get_full_name|default:leave.employee.username }}<br>
+                        <i class="bi bi-envelope me-1"></i>{{ leave.employee.email }}<br>
+                        <i class="bi bi-calendar me-1"></i>{{ leave.start_date|date:"d M Y" }} — {{ leave.end_date|date:"d M Y" }} ({{ leave.total_days }} days)
+                    </p>
+                </div>
+                <span class="badge" style="{{ leave.status_badge }};padding:5px 14px;">{{ leave.get_status_display }}</span>
+            </div>
+
+            {# -- Reason Section -- #}
+            {# Shown only when the employee provided a textual reason for the leave request. #}
+            {% if leave.reason %}
+            <div class="mb-3">
+                <label class="form-label small fw-semibold" style="color:#94A3B8;">Reason</label>
+                <p style="color:#E2E8F0;font-size:0.85rem;background:rgba(30,41,59,0.4);padding:10px;border-radius:var(--radius-sm);">{{ leave.reason }}</p>
+            </div>
+            {% endif %}
+
+            {# -- Attachment Link -- #}
+            {# If the employee uploaded a file, show a button to view it in a new tab. #}
+            {% if leave.attachment %}
+            <div class="mb-3">
+                <a href="{{ leave.attachment.url }}" class="btn btn-sm btn-rounded" style="background:rgba(129,140,248,0.1);color:#A5B4FC;border:1px solid rgba(129,140,248,0.15);padding:3px 12px;font-size:0.72rem;" target="_blank"><i class="bi bi-paperclip me-1"></i>View Attachment</a>
+            </div>
+            {% endif %}
+
+            {# -- Review Info Section -- #}
+            {# Shown only after a manager has reviewed the request. Displays who reviewed it, when, #}
+            {# and any manager note left during the review. #}
+            {% if leave.reviewed_by %}
+            <hr style="border-color:rgba(148,163,184,0.15);">
+            <div style="font-size:0.82rem;color:#94A3B8;">
+                <p><strong>Reviewed by:</strong> {{ leave.reviewed_by.get_full_name|default:leave.reviewed_by.username }}<br>
+                <strong>Reviewed at:</strong> {{ leave.reviewed_at|date:"d M Y H:i" }}</p>
+                {% if leave.manager_note %}
+                <p><strong>Manager Note:</strong> {{ leave.manager_note }}</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {# -- Manager Action Forms (Approve / Reject) -- #}
+            {# Only rendered when the leave status is 'pending'. Two side-by-side forms: #}
+            {# Left (Approve): optional manager note + green approve button, POSTs to leave_approve. #}
+            {# Right (Reject): required rejection reason + red reject button, POSTs to leave_reject. #}
+            {% if leave.status == 'pending' %}
+            <hr style="border-color:rgba(148,163,184,0.15);">
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <form method="POST" action="{% url 'leave_approve' leave.id %}">
+                        {% csrf_token %}
+                        <div class="mb-2">
+                            <textarea name="manager_note" class="form-control" rows="2" placeholder="Optional note..." style="background:rgba(30,41,59,0.6);border:1px solid rgba(148,163,184,0.15);color:#E2E8F0;font-size:0.78rem;"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-rounded w-100" style="background:#34D399;color:#0F172A;border:none;font-weight:600;padding:4px 14px;font-size:0.72rem;"><i class="bi bi-check-lg me-1"></i>Approve</button>
+                    </form>
+                </div>
+                <div class="col-md-6">
+                    <form method="POST" action="{% url 'leave_reject' leave.id %}">
+                        {% csrf_token %}
+                        <div class="mb-2">
+                            <textarea name="manager_note" class="form-control" rows="2" placeholder="Reason for rejection..." required style="background:rgba(30,41,59,0.6);border:1px solid rgba(148,163,184,0.15);color:#E2E8F0;font-size:0.78rem;"></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-rounded w-100" style="background:#F87171;color:#fff;border:none;font-weight:600;padding:4px 14px;font-size:0.72rem;"><i class="bi bi-x-lg me-1"></i>Reject</button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            {# -- Back Navigation -- #}
+            <div class="mt-3">
+                <a href="{% url 'leave_manage' %}" class="btn btn-outline-secondary btn-rounded btn-sm"><i class="bi bi-arrow-left me-1"></i>Back</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

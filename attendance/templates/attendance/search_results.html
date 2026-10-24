@@ -1,0 +1,54 @@
+{# -- Page: Search Results -- #}
+{# -- Purpose: Displays global search results across four categories: Users, Projects, Tasks, and Clients. Each category is rendered in a separate card with a list-group of clickable links. If no query is provided (q is empty), shows a prompt to enter a search term. Extends base.html. -- #}
+{% extends 'base.html' %}
+{% block title %}Search — WorkPulse{% endblock %}
+{% block page_title %}Search Results{% endblock %}
+{# -- Subtitle shows the search query string in quotes when present -- #}
+{% block page_subtitle %}{% if q %}"{{ q }}"{% endif %}{% endblock %}
+{% block content %}
+{# -- Check: only render results if a search query exists -- #}
+{% if q %}
+<div class="row g-4">
+    {# -- Column 1: Users results -- #}
+    {# -- Lists matching users as clickable list-group items linking to employee_list. Shows "No users found" when empty. -- #}
+    <div class="col-md-6">
+        <div class="card glass-card"><div class="card-header bg-white py-2 px-3 fw-semibold"><i class="bi bi-people me-2"></i>Users</div>
+            <div class="list-group list-group-flush">
+                {% for u in results.users %}<a href="{% url 'employee_list' %}" class="list-group-item list-group-item-action px-3 py-2">{{ u.get_full_name|default:u.username }}</a>{% empty %}<div class="list-group-item text-muted py-2 small">No users found</div>{% endfor %}
+            </div>
+        </div>
+    </div>
+    {# -- Column 2: Projects results -- #}
+    {# -- Lists matching projects as clickable items linking to project_detail. Shows "No projects found" when empty. -- #}
+    <div class="col-md-6">
+        <div class="card glass-card"><div class="card-header bg-white py-2 px-3 fw-semibold"><i class="bi bi-folder me-2"></i>Projects</div>
+            <div class="list-group list-group-flush">
+                {% for p in results.projects %}<a href="{% url 'project_detail' p.id %}" class="list-group-item list-group-item-action px-3 py-2">{{ p.name }}</a>{% empty %}<div class="list-group-item text-muted py-2 small">No projects found</div>{% endfor %}
+            </div>
+        </div>
+    </div>
+    {# -- Column 3: Tasks results -- #}
+    {# -- Lists matching tasks linking to their parent project_detail page. Shows task title and project name in parentheses. Shows "No tasks found" when empty. -- #}
+    <div class="col-md-6">
+        <div class="card glass-card"><div class="card-header bg-white py-2 px-3 fw-semibold"><i class="bi bi-list-task me-2"></i>Tasks</div>
+            <div class="list-group list-group-flush">
+                {% for t in results.tasks %}<a href="{% url 'project_detail' t.project.id %}" class="list-group-item list-group-item-action px-3 py-2">{{ t.title }} <small class="text-muted">({{ t.project.name }})</small></a>{% empty %}<div class="list-group-item text-muted py-2 small">No tasks found</div>{% endfor %}
+            </div>
+        </div>
+    </div>
+    {# -- Column 4: Clients results -- #}
+    {# -- Lists matching clients linking to client_list. Shows client name and optional company name. Shows "No clients found" when empty. -- #}
+    <div class="col-md-6">
+        <div class="card glass-card"><div class="card-header bg-white py-2 px-3 fw-semibold"><i class="bi bi-building me-2"></i>Clients</div>
+            <div class="list-group list-group-flush">
+                {% for c in results.clients %}<a href="{% url 'client_list' %}" class="list-group-item list-group-item-action px-3 py-2">{{ c.name }}{% if c.company %} — {{ c.company }}{% endif %}</a>{% empty %}<div class="list-group-item text-muted py-2 small">No clients found</div>{% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+{# -- Section: No query state -- #}
+{# -- Shown when the page is loaded without a q parameter. Prompts the user to enter a search term. -- #}
+<div class="card glass-card"><div class="card-body text-center py-5 text-muted">Enter a search term to find users, projects, tasks, or clients.</div></div>
+{% endif %}
+{% endblock %}

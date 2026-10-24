@@ -1,0 +1,52 @@
+{# -- Page: Client List -- #}
+{# Displays all clients in a sortable-style table with quick-action buttons. #}
+{# Shows a count header with an "Add Client" button that links to the create form. #}
+{% extends 'base.html' %}
+{% block title %}Clients — WorkPulse{% endblock %}
+{% block page_title %}Clients{% endblock %}
+{% block page_subtitle %}Manage your clients{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    {# Count of clients with proper pluralization e.g. "3 clients" / "1 client" #}
+    <p class="text-muted mb-0">{{ clients|length }} client{{ clients|length|pluralize }}</p>
+    <a href="{% url 'client_add' %}" class="btn btn-primary btn-sm btn-rounded"><i class="bi bi-plus-lg me-1"></i>Add Client</a>
+</div>
+<div class="card glass-card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            {# -- Client Table -- #}
+            {# Columns: Name, Company, Email, Phone, Projects (count), Status (Active/Inactive badge). #}
+            {# Inactive rows get .table-secondary and .opacity-75 for visual dimming. #}
+            {# Action column: pencil icon to edit, play/pause icon to toggle active status. #}
+            {# Empty state: renders a reusable empty-state component if no clients exist. #}
+            <table class="table table-hover mb-0">
+                <thead class="table-light"><tr>
+                    <th>Name</th><th>Company</th><th>Email</th><th>Phone</th><th>Projects</th><th>Status</th><th></th>
+                </tr></thead>
+                <tbody>
+                    {% for c in clients %}
+                    <tr class="{% if not c.is_active %}table-secondary opacity-75{% endif %}">
+                        <td class="fw-semibold">{{ c.name }}</td>
+                        <td>{{ c.company|default:'--' }}</td>
+                        <td>{{ c.email|default:'--' }}</td>
+                        <td>{{ c.phone|default:'--' }}</td>
+                        <td>{{ c.projects.count }}</td>
+                        <td>{% if c.is_active %}<span class="badge badge-pill-custom badge-present">Active</span>{% else %}<span class="badge badge-pill-custom badge-late">Inactive</span>{% endif %}</td>
+                        <td class="text-end">
+                            {# Edit button links to client_edit view #}
+                            <a href="{% url 'client_edit' c.id %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                            {# Toggle button: danger colour + pause icon when active, success + play icon when inactive #}
+                            <a href="{% url 'client_toggle' c.id %}" class="btn btn-sm btn-outline-{% if c.is_active %}danger{% else %}success{% endif %}">
+                                <i class="bi bi-{% if c.is_active %}pause{% else %}play{% endif %}"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7">{% include 'components/_empty_state.html' with icon='building' title='No clients yet' message='Add your first client to get started.' %}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,98 @@
+{# -- Page: Timesheet -- #}
+{# -- Purpose: Displays time entries with configurable view types (daily, weekly, monthly), date navigation (prev/next), summary statistics, a weekly overview grid, a detailed entries table, and a project-level time breakdown with proportional progress bars. Extends base.html. -- #}
+{% extends 'base.html' %}
+{% block title %}Timesheet — WorkPulse{% endblock %}
+{% block page_title %}Timesheet{% endblock %}
+{% block page_subtitle %}{{ start_date }} — {{ end_date }}{% endblock %}
+{% block content %}
+{# -- Section: Timesheet view switcher and navigation -- #}
+{# -- Row 1 (left): Three view-type buttons (Daily, Weekly, Monthly). Highlights the active view_type with btn-primary. Passes current date as query param. -- #}
+{# -- Row 1 (right): Date navigation with left/right chevron buttons (prev_date / next_date) and a centered date range label. -- #}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex gap-2">
+        <a href="?view=daily&date={{ today }}" class="btn btn-sm {% if view_type == 'daily' %}btn-primary{% else %}btn-outline-secondary{% endif %} btn-rounded">Daily</a>
+        <a href="?view=weekly&date={{ today }}" class="btn btn-sm {% if view_type == 'weekly' %}btn-primary{% else %}btn-outline-secondary{% endif %} btn-rounded">Weekly</a>
+        <a href="?view=monthly&date={{ today }}" class="btn btn-sm {% if view_type == 'monthly' %}btn-primary{% else %}btn-outline-secondary{% endif %} btn-rounded">Monthly</a>
+    </div>
+    <div class="d-flex gap-2 align-items-center">
+        <a href="?view={{ view_type }}&date={{ prev_date }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+        <span class="fw-semibold small">{{ start_date }} — {{ end_date }}</span>
+        <a href="?view={{ view_type }}&date={{ next_date }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+    </div>
+</div>
+
+
+{# -- Section: Summary statistics cards -- #}
+{# -- Two stat cards: Total Hours (sum of all entry durations) and total Entries count. Shown in a 2-column grid at the top. -- #}
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="card p-3 text-center"><small class="text-muted">Total Hours</small><h3 class="mb-0 fw-bold">{{ total_hours }}h</h3></div></div>
+    <div class="col-md-3"><div class="card p-3 text-center"><small class="text-muted">Entries</small><h3 class="mb-0 fw-bold">{{ entries|length }}</h3></div></div>
+</div>
+
+{# -- Section: Weekly date grid overview -- #}
+{# -- Only rendered when view_type == 'weekly' and date_grid is provided. Shows one card per day of the week with the day label and total minutes logged. The current day (matching today) is highlighted with border-primary. -- #}
+{% if view_type == 'weekly' and date_grid %}
+<div class="row g-3 mb-4">
+    {% for day in date_grid %}
+    <div class="col" style="min-width:120px;">
+        <div class="card {% if day.date == today %}border-primary{% endif %}">
+            <div class="card-body p-2 text-center">
+                <small class="fw-semibold d-block">{{ day.label }}</small>
+                <span class="fw-bold">{{ day.total|default:0 }}m</span>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+
+{# -- Section: Time entries table -- #}
+{# -- Full-width table listing all time entries for the selected period. Columns: Date (formatted d M), User (full name), Project (via task relation), Task (title), Duration (in minutes), Description (truncated to 8 words). Shows an empty-state message when no entries exist. -- #}
+<div class="card glass-card">
+    <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Time Entries</span>
+        <small class="text-muted">{{ entries|length }} entries</small>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive-custom">
+            <table class="table table-hover mb-0">
+                <thead class="table-light"><tr>
+                    <th>Date</th><th>User</th><th>Project</th><th>Task</th><th>Duration</th><th>Description</th>
+                </tr></thead>
+                <tbody>
+                    {% for e in entries %}
+                    <tr>
+                        <td>{{ e.start_time|date:"d M" }}</td>
+                        <td>{{ e.user.get_full_name|default:e.user.username }}</td>
+                        <td>{{ e.task.project.name }}</td>
+                        <td>{{ e.task.title }}</td>
+                        <td class="fw-semibold">{{ e.duration_minutes }}m</td>
+                        <td><small class="text-muted">{{ e.description|truncatewords:8|default:'—' }}</small></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center py-4 text-muted">No time entries found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{# -- Section: Time by project breakdown -- #}
+{# -- Rendered when project_totals is non-empty. Shows each project name, total minutes logged, percentage of overall time, and a proportional gradient progress bar. Uses widthratio to calculate the bar width relative to total_minutes. -- #}
+{% if project_totals %}
+<div class="card glass-card mt-3">
+    <div class="card-header bg-white py-3 px-4"><span class="fw-semibold">Time by Project</span></div>
+    <div class="card-body p-4">
+        {% for pname, mins in project_totals.items %}
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span>{{ pname }}</span>
+            <span class="fw-semibold">{{ mins|floatformat:0 }}m ({% widthratio mins total_minutes 100 %}%)</span>
+        </div>
+        <div class="progress-custom mb-3"><div class="progress-bar-custom" style="width:{% widthratio mins total_minutes 100 %}%;background:linear-gradient(90deg,#4e73df,#1cc88a);"></div></div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

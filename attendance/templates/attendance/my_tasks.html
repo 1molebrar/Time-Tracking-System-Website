@@ -1,0 +1,118 @@
+{# -- Page: My Tasks -- #}
+{# -- User's task dashboard split into two panels: (1) "Assigned to Me" — a full table of tasks #}
+{# -- assigned to the current user, with columns for title, project, priority, status, logged #}
+{# -- hours vs estimate, deadline, and timer/actions; (2) "Open Tasks" — a compact sidebar showing #}
+{# -- unclaimed tasks with a "Claim" button. The subtitle dynamically shows assigned/open counts. #}
+{# -- Timer buttons toggle between start/stop based on whether the active running timer belongs to #}
+{# -- the current task. -- #}
+{% extends 'base.html' %}
+{% block title %}My Tasks — WorkPulse{% endblock %}
+{% block page_title %}My Tasks{% endblock %}
+{% block page_subtitle %}{{ assigned_tasks|length }} assigned · {{ open_tasks|length }} available{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    {# -- MAIN PANEL (left 8/12): assigned tasks table -- #}
+    <div class="col-lg-8">
+        <div class="card glass-card">
+            {# -- Header with "Assigned to Me" title and link to kanban board view -- #}
+            <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-check2-square me-2 text-primary"></i>Assigned to Me</span>
+                <a href="{% url 'task_board' %}?assigned=mine" class="btn btn-sm btn-outline-primary"><i class="bi bi-kanban me-1"></i>Board</a>
+            </div>
+            <div class="card-body p-0">
+                {% if assigned_tasks %}
+                <div class="table-responsive">
+                    {# -- Table columns:
+                    #    Task   — clickable title linking to task_detail
+                    #    Project — project name
+                    #    Priority — colour-coded badge (Urgent/High/Medium/Low)
+                    #    Status — colour-coded badge (To Do/In Progress/Review/Done/Blocked)
+                    #    Logged — hours logged vs estimated (or ∞ if no estimate)
+                    #    Deadline — date with overdue highlighting, or "--" if none
+                    #    Actions — start/stop timer button + eye/details button
+                    # -- #}
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr><th>Task</th><th>Project</th><th>Priority</th><th>Status</th><th>Logged</th><th>Deadline</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            {% for t in assigned_tasks %}
+                            <tr>
+                                <td class="fw-semibold">
+                                    <a href="{% url 'task_detail' t.id %}" class="text-decoration-none">{{ t.title }}</a>
+                                </td>
+                                <td><small class="text-muted">{{ t.project.name }}</small></td>
+                                <td>
+                                    {% if t.priority == 'urgent' %}<span class="badge bg-danger">Urgent</span>
+                                    {% elif t.priority == 'high' %}<span class="badge bg-warning text-dark">High</span>
+                                    {% elif t.priority == 'medium' %}<span class="badge bg-primary">Medium</span>
+                                    {% else %}<span class="badge bg-success">Low</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if t.status == 'todo' %}<span class="badge bg-secondary">To Do</span>
+                                    {% elif t.status == 'in_progress' %}<span class="badge bg-primary">In Progress</span>
+                                    {% elif t.status == 'in_review' %}<span class="badge bg-warning text-dark">Review</span>
+                                    {% elif t.status == 'done' %}<span class="badge bg-success">Done</span>
+                                    {% elif t.status == 'blocked' %}<span class="badge bg-danger">Blocked</span>
+                                    {% endif %}
+                                </td>
+                                <td><small class="text-muted">{{ t.total_logged_hours }}h / {% if t.estimated_hours > 0 %}{{ t.estimated_hours }}h{% else %}&infin;{% endif %}</small></td>
+                                <td>
+                                    {% if t.deadline %}
+                                    <small class="{% if t.is_overdue %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                                        {{ t.deadline|date:"d M" }}
+                                    </small>
+                                    {% else %}<small class="text-muted">--</small>{% endif %}
+                                </td>
+                                {# -- Actions column: start/stop timer based on active timer state, and view details -- #}
+                                <td class="text-end">
+                                    {% if active_timer and active_timer.task_id == t.id and active_timer.is_running %}
+                                    <a href="{% url 'timer_stop' %}" class="btn btn-sm btn-outline-danger" title="Stop timer"><i class="bi bi-stop-fill"></i></a>
+                                    {% else %}
+                                    <a href="{% url 'timer_start' t.id %}" class="btn btn-sm btn-outline-success" title="Start timer"><i class="bi bi-play-fill"></i></a>
+                                    {% endif %}
+                                    <a href="{% url 'task_detail' t.id %}" class="btn btn-sm btn-outline-secondary" title="View details"><i class="bi bi-eye"></i></a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                {% include 'components/_empty_state.html' with icon='check2-square' title='No tasks assigned' message='No tasks have been assigned to you yet.' %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# -- SIDEBAR (right 4/12): preview of unclaimed open tasks with claim buttons -- #}
+    <div class="col-lg-4">
+        <div class="card glass-card">
+            <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-box-seam me-2 text-success"></i>Open Tasks</span>
+                <a href="{% url 'open_tasks' %}" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    {% for t in open_tasks %}
+                    <div class="list-group-item px-3 py-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small fw-semibold">{{ t.title }}</div>
+                            <small class="text-muted">{{ t.project.name }}</small>
+                        </div>
+                        <a href="{% url 'claim_task' t.id %}" class="btn btn-sm btn-success btn-rounded">
+                            <i class="bi bi-hand-index-thumb me-1"></i>Claim
+                        </a>
+                    </div>
+                    {% empty %}
+                    {% include 'components/_empty_state.html' with icon='box-seam' title='No open tasks' message='No open tasks available to claim.' %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

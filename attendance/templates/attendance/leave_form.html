@@ -1,0 +1,60 @@
+{# -- Page: Leave Request Form -- #}
+{# Allows an employee to submit a new leave request. Uses multipart encoding for file attachment upload. #}
+{# POSTs to the same view; CSRF token included for security. #}
+{% extends 'base.html' %}
+{% block title %}New Leave Request — WorkPulse{% endblock %}
+{% block page_title %}New Leave Request{% endblock %}
+{% block page_subtitle %}Submit a leave request for approval{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card glass-card p-4">
+            {# -- Form: enctype required for optional file attachment -- #}
+            <form method="POST" enctype="multipart/form-data">
+                {% csrf_token %}
+                {# -- Field Group: Leave Type -- #}
+                {# Renders radio buttons for each item in the leave_types list of (key, label) tuples. #}
+                {# One selection is required. Each radio has a unique ID (lt_<key>) linked to its label. #}
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Leave Type</label>
+                    {% for key, label in leave_types %}
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="leave_type" value="{{ key }}" id="lt_{{ key }}" required>
+                        <label class="form-check-label" for="lt_{{ key }}">{{ label }}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {# -- Field Group: Date Range -- #}
+                {# Two date inputs in a 2-column row: Start Date and End Date, both required. #}
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Start Date</label>
+                        <input type="date" name="start_date" class="form-control" required style="background:rgba(30,41,59,0.6);border:1px solid rgba(148,163,184,0.15);color:#E2E8F0;font-size:0.82rem;">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">End Date</label>
+                        <input type="date" name="end_date" class="form-control" required style="background:rgba(30,41,59,0.6);border:1px solid rgba(148,163,184,0.15);color:#E2E8F0;font-size:0.82rem;">
+                    </div>
+                </div>
+                {# -- Field Group: Reason (optional) -- #}
+                {# Free-text textarea for the employee to explain the reason for leave. #}
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Reason</label>
+                    <textarea name="reason" class="form-control" rows="3" style="background:rgba(30,41,59,0.6);border:1px solid rgba(148,163,184,0.15);color:#E2E8F0;font-size:0.82rem;" placeholder="Optional explanation..."></textarea>
+                </div>
+                {# -- Field Group: Attachment (optional) -- #}
+                {# File input for uploading supporting documents (doctor note, etc.). #}
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Attachment (optional)</label>
+                    <input type="file" name="attachment" class="form-control" style="background:rgba(30,41,59,0.6);border:1px solid rgba(148,163,184,0.15);color:#E2E8F0;font-size:0.82rem;">
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-rounded"><i class="bi bi-send me-1"></i>Submit Request</button>
+                    <a href="{% url 'leave_list' %}" class="btn btn-outline-secondary btn-rounded">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

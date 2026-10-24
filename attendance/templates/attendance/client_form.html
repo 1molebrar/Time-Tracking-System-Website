@@ -1,0 +1,53 @@
+{# -- Page: Client Add/Edit Form -- #}
+{# Dual-purpose form: creates a new client or edits an existing one. #}
+{# Title/subtitle and submit button text switch dynamically based on whether a `client` object exists. #}
+{% extends 'base.html' %}
+{% block title %}{% if client %}Edit{% else %}Add{% endif %} Client — WorkPulse{% endblock %}
+{% block page_title %}{% if client %}Edit Client{% else %}New Client{% endif %}{% endblock %}
+{% block page_subtitle %}{% if client %}Update client information{% else %}Add a new client{% endif %}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card glass-card p-4">
+            {# -- Form Fields -- #}
+            {# POSTs to the same view; CSRF token included for security. #}
+            {# 1. Client Name (required) — text input, pre-filled if editing. #}
+            {# 2. Company — optional text field in a 2-col row alongside Email. #}
+            {# 3. Email — optional email input, validated by browser. #}
+            {# 4. Phone — optional free-text phone number. #}
+            {# 5. Notes — optional multi-line textarea for free-form details. #}
+            {# Submit button text changes: "Create Client" vs "Update Client". #}
+            {# Cancel link returns to the client list view. #}
+            <form method="POST">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Client Name *</label>
+                    <input type="text" name="name" class="form-control" value="{{ client.name|default:'' }}" required>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Company</label>
+                        <input type="text" name="company" class="form-control" value="{{ client.company|default:'' }}">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-semibold">Email</label>
+                        <input type="email" name="email" class="form-control" value="{{ client.email|default:'' }}">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Phone</label>
+                    <input type="text" name="phone" class="form-control" value="{{ client.phone|default:'' }}">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Notes</label>
+                    <textarea name="notes" class="form-control" rows="3">{{ client.notes|default:'' }}</textarea>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-rounded">{% if client %}Update{% else %}Create{% endif %} Client</button>
+                    <a href="{% url 'client_list' %}" class="btn btn-outline-secondary btn-rounded">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

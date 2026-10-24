@@ -1,0 +1,56 @@
+{# -- Page: Login -- #}
+{# Standalone login form extending base.html (which provides the wrapper  #}
+{# and unauthenticated container). Presents a centered card with the       #}
+{# WorkPulse brand icon/name, username field with person icon prefix,      #}
+{# password field with lock icon prefix, and a full-width Sign In button.  #}
+{# Form submits via POST (Django authentication backend). Uses Bootstrap   #}
+{# input-group for icon-in-input styling. No extra JS needed.             #}
+{# ======================================================================= #}
+{% extends 'base.html' %}
+{% block title %}Login — WorkPulse{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5 col-lg-4">
+        <div class="card glass-card p-4" style="border:1px solid var(--border-color);">
+            {# -- Brand logo and heading -- #}
+            <div class="text-center mb-4">
+                <div style="width:56px;height:56px;margin:0 auto;background:linear-gradient(135deg,var(--accent),#818CF8);border-radius:16px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px var(--accent-glow);">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="rgba(255,255,255,0.2)"/>
+                        <circle cx="12" cy="12" r="3" fill="#fff" opacity="0.6"/>
+                        <path d="M12 9v3l2 2" stroke="#fff" stroke-width="1.5" opacity="0.8"/>
+                    </svg>
+                </div>
+                <h3 class="mt-3 fw-bold" style="color:var(--text-primary);">WorkPulse</h3>
+                <p style="color:var(--text-muted);font-size:0.85rem;">Sign in to your account</p>
+            </div>
+
+            {# -- Login form (Username + Password) -- #}
+            <form method="POST">
+                {% csrf_token %}
+                {# -- Username field with person icon -- #}
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold" style="color:var(--text-primary);">Username</label>
+                    <div class="input-group">
+                        <span class="input-group-text" style="background:var(--bg-primary);border:1px solid var(--border-color);color:var(--text-muted);border-right:none;"><i class="bi bi-person"></i></span>
+                        <input type="text" name="username" id="id_username" class="form-control" placeholder="Enter username" required style="border-left:none;">
+                    </div>
+                </div>
+                {# -- Password field with lock icon -- #}
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold" style="color:var(--text-primary);">Password</label>
+                    <div class="input-group">
+                        <span class="input-group-text" style="background:var(--bg-primary);border:1px solid var(--border-color);color:var(--text-muted);border-right:none;"><i class="bi bi-lock"></i></span>
+                        <input type="password" name="password" id="id_password" class="form-control" placeholder="Enter password" required style="border-left:none;">
+                    </div>
+                </div>
+                {# -- Submit button -- #}
+                <button type="submit" class="btn w-100 btn-rounded mt-2 py-2 fw-semibold" style="background:var(--accent);color:#fff;border:none;">
+                    <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

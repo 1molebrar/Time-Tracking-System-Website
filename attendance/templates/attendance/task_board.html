@@ -1,0 +1,195 @@
+{# -- Page: Task Board (Kanban) -- #}
+{# -- Purpose: Provides a drag-and-drop Kanban board for managing tasks across five status columns (To Do, In Progress, In Review, Done, Blocked). Includes filter controls for project and assignee, inline status updates via AJAX, visual priority indicators, assignee avatars, progress bars, and overdue badges. Extends base.html. -- #}
+{% extends 'base.html' %}
+{% block title %}Task Board — WorkPulse{% endblock %}
+{% block page_title %}Task Board{% endblock %}
+{% block page_subtitle %}Drag & drop to update status{% endblock %}
+{% block extra_head %}
+{# -- Inline CSS for the Kanban board layout. Defines: -- #}
+{# -- .board: horizontal flex container with overflow-x scroll -- #}
+{# -- .board-column: individual status columns with fixed min/max width -- #}
+{# -- .task-card: draggable card with hover effect, dragging opacity, and color-coded left-border priority strip (urgent=red, high=yellow, medium=blue, low=green). -- #}
+{# -- .column-dropzone: drop target with highlighted state on drag-over -- #}
+{# -- .assignee-avatar: circular gradient avatar for task assignee -- #}
+{# -- .progress-mini / .progress-mini-bar: thin progress bar within each card -- #}
+{# -- .overdue-badge: red badge for tasks past deadline -- #}
+<style>
+    .board { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 20px; min-height: calc(100vh - 220px); }
+    .board-column { min-width: 260px; max-width: 300px; flex: 1; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 12px; border: 1px solid var(--border-color); }
+    .column-header { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 12px; }
+    .task-card { background: var(--bg-card); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 10px; cursor: grab; transition: all 0.2s; border: 1px solid var(--border-color); position: relative; }
+    .task-card:hover { box-shadow: var(--shadow-elevated); transform: translateY(-2px); border-color: rgba(148,163,184,0.15); }
+    .task-card.dragging { opacity: 0.5; transform: rotate(2deg); }
+    .task-card .task-title { font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: var(--text-primary); }
+    .task-card .task-title a { color: var(--text-primary); }
+    .task-card .task-title a:hover { color: var(--accent); }
+    .task-card .task-meta { font-size: 0.7rem; color: var(--text-muted); }
+    .task-card .task-priority { width: 4px; height: 100%; position: absolute; left: 0; top: 0; border-radius: 8px 0 0 8px; }
+    .priority-urgent { background: var(--danger); }
+    .priority-high { background: var(--warning); }
+    .priority-medium { background: var(--accent); }
+    .priority-low { background: var(--success); }
+    .column-dropzone { min-height: 100px; transition: background 0.2s; border-radius: var(--radius-sm); padding: 4px; }
+    .column-dropzone.drag-over { background: rgba(79,70,229,0.08); }
+    .assignee-avatar { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg,var(--accent),#60A5FA); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 0.55rem; font-weight: 700; }
+    .board-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+    .task-count-badge { font-size: 0.6rem; padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,0.15); margin-left: 6px; }
+    .empty-column { text-align: center; padding: 30px 10px; color: var(--text-muted); font-size: 0.78rem; }
+    .progress-mini { height: 4px; border-radius: 2px; background: rgba(148,163,184,0.1); margin-top: 6px; overflow: hidden; }
+    .progress-mini-bar { height: 100%; border-radius: 2px; transition: width 0.5s; }
+    .overdue-badge { font-size: 0.55rem; background: rgba(239,68,68,0.15); color: #FCA5A5; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+</style>
+{% endblock %}
+{% block content %}
+{# -- Section: Board filter toolbar -- #}
+{# -- Provides two <select> dropdowns that auto-submit on change: -- #}
+{# -- 1. Project filter: filters tasks by selected project (default "All Projects") -- #}
+{# -- 2. Assignee filter: filters by user — includes "Everyone", "My Tasks", "Unassigned", and individual users. -- #}
+{# -- A "Clear" button resets all filters back to the default task_board URL. -- #}
+<div class="board-toolbar">
+    <form method="GET" class="d-flex gap-2 align-items-center flex-wrap">
+        <select name="project" class="form-select form-select-sm" style="width:auto;background:var(--bg-primary);border:1px solid var(--border-color);color:var(--text-primary);" onchange="this.form.submit()">
+            <option value="">All Projects</option>
+            {% for p in projects %}
+            <option value="{{ p.id }}" {% if selected_project == p.id|stringformat:'s' %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+        </select>
+        <select name="assigned" class="form-select form-select-sm" style="width:auto;background:var(--bg-primary);border:1px solid var(--border-color);color:var(--text-primary);" onchange="this.form.submit()">
+            <option value="">Everyone</option>
+            <option value="mine" {% if selected_assigned == 'mine' %}selected{% endif %}>My Tasks</option>
+            <option value="unassigned" {% if selected_assigned == 'unassigned' %}selected{% endif %}>Unassigned</option>
+            {% for u in users %}
+            <option value="{{ u.id }}" {% if selected_assigned == u.id|stringformat:'s' %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+            {% endfor %}
+        </select>
+        <a href="{% url 'task_board' %}" class="btn btn-sm btn-outline-secondary">Clear</a>
+    </form>
+</div>
+
+{# -- Section: Kanban board columns -- #}
+{# -- Iterates over `columns` (a list of dicts with key, label, tasks). Each column is rendered as a .board-column with a color-coded header (gray=todo, blue=in_progress, yellow=in_review, green=done, red=blocked) and a task count badge. Inside each column, individual task cards are rendered with: -- #}
+{# -- Left border priority strip (color-coded) -- #}
+{# -- Title linking to task_detail -- #}
+{# -- Project name -- #}
+{# -- Assignee avatar (first letter) or unassigned icon -- #}
+{# -- Completed-by badge + timestamp (when status == 'done') -- #}
+{# -- Deadline date with overdue badge if past due -- #}
+{# -- Mini progress bar colored green/accent/warning based on percentage -- #}
+{# -- Empty columns show an empty-state component. -- #}
+<div class="board" id="taskBoard">
+    {% for col in columns %}
+    <div class="board-column glass-card" data-status="{{ col.key }}">
+        <div class="column-header d-flex justify-content-between align-items-center"
+             style="background:{% if col.key == 'todo' %}rgba(148,163,184,0.1);color:var(--text-secondary){% elif col.key == 'in_progress' %}rgba(79,70,229,0.15);color:#A5B4FC{% elif col.key == 'in_review' %}rgba(245,158,11,0.15);color:#FCD34D{% elif col.key == 'done' %}rgba(34,197,94,0.15);color:#86EFAC{% elif col.key == 'blocked' %}rgba(239,68,68,0.15);color:#FCA5A5{% endif %}">
+            <span>{{ col.label }}</span>
+            <span class="task-count-badge" style="background:rgba(0,0,0,0.12);">{{ col.tasks|length }}</span>
+        </div>
+        <div class="column-dropzone" data-status="{{ col.key }}">
+            {% for task in col.tasks %}
+            <div class="task-card" draggable="true" data-task-id="{{ task.id }}" data-status="{{ task.status }}">
+                <div class="task-priority priority-{{ task.priority }}"></div>
+                <div class="ps-2">
+                    <div class="task-title">
+                        <a href="{% url 'task_detail' task.id %}" class="text-decoration-none">{{ task.title }}</a>
+                    </div>
+                    <div class="task-meta d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-folder me-1"></i>{{ task.project.name }}</span>
+                        {% if task.assigned_to %}
+                        <span class="assignee-avatar" title="{{ task.assigned_to.get_full_name|default:task.assigned_to.username }}">{{ task.assigned_to.username|first|upper }}</span>
+                        {% else %}
+                        <span style="color:var(--text-muted);"><i class="bi bi-person-plus"></i></span>
+                        {% endif %}
+                    </div>
+                    {% if task.status == 'done' and task.completed_by %}
+                    <div class="task-meta mt-1" style="color:var(--success);font-size:0.65rem;">
+                        <i class="bi bi-check-circle-fill me-1"></i>{{ task.completed_by.get_full_name|default:task.completed_by.username }}
+                        {% if task.completed_at %}· {{ task.completed_at|date:"d M H:i" }}{% endif %}
+                    </div>
+                    {% endif %}
+                    {% if task.deadline %}
+                    <div class="task-meta mt-1 d-flex justify-content-between">
+                        <span><i class="bi bi-calendar3 me-1"></i>{{ task.deadline|date:"d M" }}</span>
+                        {% if task.is_overdue %}
+                        <span class="overdue-badge"><i class="bi bi-exclamation-triangle me-1"></i>Overdue</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    <div class="progress-mini">
+                        <div class="progress-mini-bar"
+                            {% if task.progress_percent >= 100 %}style="background:var(--success);width:{{ task.progress_percent }}%"
+                            {% elif task.progress_percent >= 50 %}style="background:var(--accent);width:{{ task.progress_percent }}%"
+                            {% else %}style="background:var(--warning);width:{{ task.progress_percent }}%"
+                            {% endif %}></div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            {% include 'components/_empty_state.html' with icon='list-task' title='No tasks' %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{# -- JavaScript: Drag-and-drop task status update -- #}
+{# -- This block handles the interactive Kanban drag-and-drop functionality: -- #}
+{# -- 1. Selects all draggable task cards and column dropzones. -- #}
+{# -- 2. On dragstart: adds "dragging" class, stores task ID and current status in dataTransfer. -- #}
+{# -- 3. On dragend: removes "dragging" class and clears "drag-over" visual state from all dropzones. -- #}
+{# -- 4. On dragover: prevents default to allow drop, adds "drag-over" visual class. -- #}
+{# -- 5. On dragleave: removes "drag-over" class. -- #}
+{# -- 6. On drop: prevents default, removes "drag-over", reads task ID and new status from dataTransfer/dataset. If the status actually changed, sends a POST request via fetch() to /tasks/<id>/status/ajax/ with the new status and CSRF token. On success (response.status == 'ok'), moves the card DOM element into the new column. Silently catches errors. -- #}
+<script>
+    const dragCards = document.querySelectorAll('.task-card[draggable]');
+    const dropzones = document.querySelectorAll('.column-dropzone');
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+
+    dragCards.forEach(card => {
+        card.addEventListener('dragstart', function(e) {
+            this.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', this.dataset.taskId);
+            e.dataTransfer.setData('fromStatus', this.dataset.status);
+        });
+        card.addEventListener('dragend', function() {
+            this.classList.remove('dragging');
+            dropzones.forEach(z => z.classList.remove('drag-over'));
+        });
+    });
+
+    dropzones.forEach(zone => {
+        zone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('drag-over');
+        });
+        zone.addEventListener('dragleave', function() {
+            this.classList.remove('drag-over');
+        });
+        zone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+            const taskId = e.dataTransfer.getData('text/plain');
+            const fromStatus = e.dataTransfer.getData('fromStatus');
+            const newStatus = this.dataset.status;
+            if (fromStatus === newStatus) return;
+
+            const card = document.querySelector(`[data-task-id="${taskId}"]`);
+            if (card) {
+                const formData = new FormData();
+                formData.append('status', newStatus);
+                fetch(`/tasks/${taskId}/status/ajax/`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {'X-CSRFToken': csrfToken ? csrfToken.value : ''}
+                }).then(r => r.json()).then(data => {
+                    if (data.status === 'ok') {
+                        card.dataset.status = newStatus;
+                        this.appendChild(card);
+                    }
+                }).catch(() => {});
+            }
+        });
+    });
+</script>
+{% endblock %}

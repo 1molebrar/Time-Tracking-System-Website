@@ -1,0 +1,45 @@
+{# -- Page: Meeting Notes -- #}
+{# -- Form for adding or editing notes for a specific meeting. Shows meeting metadata (date, #}
+{# -- time range, participant/attendee counts) as context above the textarea. POSTs to the #}
+{# -- current URL; the view handles both create and update. The Cancel link returns to the #}
+{# -- meeting detail page. -- #}
+{% extends 'base.html' %}
+{% block title %}Meeting Notes — WorkPulse{% endblock %}
+{% block page_title %}Meeting Notes{% endblock %}
+{% block page_subtitle %}{{ meeting.title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card glass-card">
+            {# -- Card header with the meeting title for context -- #}
+            <div class="card-header py-3 px-4">
+                <span class="fw-semibold"><i class="bi bi-journal-text me-2" style="color:var(--accent);"></i>Notes for {{ meeting.title }}</span>
+            </div>
+            <div class="card-body p-4">
+                {# -- Meeting context bar: date, time range, participant and attendee counts -- #}
+                <div class="mb-3">
+                    <div class="d-flex flex-wrap gap-3 mb-3" style="font-size:0.82rem;color:var(--text-muted);">
+                        <span><i class="bi bi-calendar3 me-1"></i>{{ meeting.date|date:"d M Y" }}</span>
+                        <span><i class="bi bi-clock me-1"></i>{{ meeting.start_time|time:"H:i" }} — {{ meeting.end_time|time:"H:i" }}</span>
+                        <span><i class="bi bi-people me-1"></i>{{ meeting.participant_count }} participants · {{ meeting.attendee_count }} attended</span>
+                    </div>
+                </div>
+
+                {# -- Notes form: pre-populated with existing notes content if editing -- #}
+                <form method="POST">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" style="font-size:0.82rem;">Meeting Notes / Summary</label>
+                        <textarea name="notes" class="form-control" rows="10" placeholder="What was discussed? Decisions made? Action items...">{{ meeting.notes }}</textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary btn-rounded"><i class="bi bi-check-lg me-1"></i>Save Notes</button>
+                        <a href="{% url 'meeting_detail' meeting.id %}" class="btn btn-outline-secondary btn-rounded">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

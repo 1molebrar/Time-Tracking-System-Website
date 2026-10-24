@@ -1,0 +1,48 @@
+{# -- Page: My Leave Requests List -- #}
+{# Lists all leave requests submitted by the currently logged-in employee. #}
+{# Shows type, date range, day count, status, reviewer, and a cancel action for pending requests. #}
+{% extends 'base.html' %}
+{% block title %}My Leave Requests — WorkPulse{% endblock %}
+{% block page_title %}Leave Requests{% endblock %}
+{% block page_subtitle %}Manage your leave requests{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div></div>
+    {# Button to create a new leave request, styled as an accent pill button #}
+    <a href="{% url 'leave_create' %}" class="btn btn-sm btn-rounded" style="background:var(--accent);color:#fff;border:none;font-weight:600;padding:4px 14px;font-size:0.72rem;"><i class="bi bi-plus-lg me-1"></i>New Leave Request</a>
+</div>
+
+<div class="card glass-card">
+    <div class="card-body p-0">
+        <div class="table-responsive-custom">
+            {# -- Leave Requests Table -- #}
+            {# Columns: Type (leave category with icon), Dates (start-end range), Days (total day count), #}
+            {# Status (color-coded badge using dynamic leave.status_badge style), #}
+            {# Reviewed By (manager name or dash), Action (Cancel button — only shown for pending requests, #}
+            {# with a confirm() dialog before navigating to leave_cancel). #}
+            <table class="table table-hover mb-0">
+                <thead><tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Reviewed By</th><th></th></tr></thead>
+                <tbody>
+                    {% for leave in leaves %}
+                    <tr>
+                        <td style="font-size:0.82rem;"><i class="bi bi-file-earmark-text me-2" style="color:var(--accent);"></i>{{ leave.get_leave_type_display }}</td>
+                        <td style="font-size:0.78rem;color:#94A3B8;">{{ leave.start_date|date:"d M" }} — {{ leave.end_date|date:"d M Y" }}</td>
+                        <td style="font-size:0.78rem;">{{ leave.total_days }}d</td>
+                        <td><span class="badge" style="{{ leave.status_badge }}">{{ leave.get_status_display }}</span></td>
+                        <td style="font-size:0.75rem;color:#64748B;">{% if leave.reviewed_by %}{{ leave.reviewed_by.get_full_name|default:leave.reviewed_by.username }}{% else %}—{% endif %}</td>
+                        <td class="text-end">
+                            {% if leave.status == 'pending' %}
+                            <a href="{% url 'leave_cancel' leave.id %}" class="btn btn-sm btn-rounded" style="background:rgba(148,163,184,0.1);color:#CBD5E1;border:1px solid rgba(148,163,184,0.15);padding:3px 12px;font-size:0.68rem;" onclick="return confirm('Cancel this leave request?')"><i class="bi bi-x-lg me-1"></i>Cancel</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center py-5" style="color:#64748B;">No leave requests yet</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

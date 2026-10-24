@@ -1,0 +1,118 @@
+{# -- Page: Reports -- #}
+{# -- Purpose: Displays aggregated time and attendance reports with three view modes (attendance, projects, users) and three period types (daily, weekly, monthly). Allows CSV/PDF export. Extends base.html. -- #}
+{% extends 'base.html' %}
+{% block title %}Reports — WorkPulse{% endblock %}
+{% block page_title %}Reports{% endblock %}
+{% block page_subtitle %}{{ start_date }} — {{ end_date }}{% endblock %}
+{% block content %}
+{# -- Section: Report view switcher (top toolbar) -- #}
+{# -- Row 1 (left): Three buttons to toggle between attendance, projects, and users report views. Highlights the active view with btn-primary. Passes current report_type and today's date as query params. -- #}
+{# -- Row 1 (right): Three buttons to toggle between daily, weekly, and monthly period types. Preserves the current report_view. -- #}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="d-flex gap-2">
+        <a href="?view=attendance&type={{ report_type }}&date={{ today|date:'Y-m-d' }}" class="btn btn-sm {% if report_view == 'attendance' or not report_view %}btn-primary{% else %}btn-outline-secondary{% endif %} btn-rounded">Attendance</a>
+        <a href="?view=projects&type={{ report_type }}&date={{ today|date:'Y-m-d' }}" class="btn btn-sm {% if report_view == 'projects' %}btn-primary{% else %}btn-outline-secondary{% endif %} btn-rounded">Projects</a>
+        <a href="?view=users&type={{ report_type }}&date={{ today|date:'Y-m-d' }}" class="btn btn-sm {% if report_view == 'users' %}btn-primary{% else %}btn-outline-secondary{% endif %} btn-rounded">Users</a>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="?view={{ report_view|default:'attendance' }}&type=daily&date={{ today|date:'Y-m-d' }}" class="btn btn-sm {% if report_type == 'daily' %}btn-primary{% else %}btn-outline-secondary{% endif %} btn-rounded">Daily</a>
+        <a href="?view={{ report_view|default:'attendance' }}&type=weekly&date={{ today|date:'Y-m-d' }}" class="btn btn-sm {% if report_type == 'weekly' %}btn-primary{% else %}btn-outline-secondary{% endif %} btn-rounded">Weekly</a>
+        <a href="?view={{ report_view|default:'attendance' }}&type=monthly&date={{ today|date:'Y-m-d' }}" class="btn btn-sm {% if report_type == 'monthly' %}btn-primary{% else %}btn-outline-secondary{% endif %} btn-rounded">Monthly</a>
+    </div>
+</div>
+
+{# -- Section: Project report view -- #}
+{# -- Renders when report_view == 'projects'. Shows summary stat cards (total hours, project count) and a project time distribution chart with progress bars proportional to the top project's minutes. Each row shows project name, status badge, hours+minutes, and a gradient progress bar. Empty state when no project_data. Includes CSV export button. -- #}
+{% if report_view == 'projects' %}
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="card p-3 text-center"><small class="text-muted">Total Hours</small><h3 class="mb-0 fw-bold">{{ summary.total_hours }}h</h3></div></div>
+    <div class="col-md-3"><div class="card p-3 text-center"><small class="text-muted">Projects</small><h3 class="mb-0 fw-bold">{{ summary.project_count }}</h3></div></div>
+</div>
+<div class="card glass-card">
+    <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-folder me-2 text-primary"></i>Project Time Distribution</span>
+        <a href="{% url 'export_csv' %}?view=projects&type={{ report_type }}&date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download me-1"></i>CSV</a>
+    </div>
+    <div class="card-body p-4">
+        {% if project_data %}
+        {% for pd in project_data %}
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="fw-semibold small">{{ pd.project.name }} <span class="badge" style="font-size:0.55rem;background:{% if pd.project.status == 'active' %}rgba(34,197,94,0.15);color:#86EFAC{% elif pd.project.status == 'completed' %}rgba(96,165,250,0.15);color:#93C5FD{% else %}rgba(148,163,184,0.15);color:#94A3B8{% endif %};">{{ pd.project.get_status_display }}</span></span>
+            <span class="small">{{ pd.hours }}h ({{ pd.minutes }}m)</span>
+        </div>
+        <div class="progress-custom mb-3"><div class="progress-bar-custom" style="width:{% widthratio pd.minutes project_data.0.minutes 100 %}%;background:linear-gradient(90deg,#4e73df,#1cc88a);"></div></div>
+        {% endfor %}
+        {% else %}
+        <div class="text-center py-4">
+            <i class="bi bi-folder" style="font-size:2rem;color:#64748B;"></i>
+            <p class="mt-2" style="color:#64748B;">No time entries found for the selected period.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{# -- Section: User productivity report -- #}
+{# -- Renders when report_view == 'users' and user_data is non-empty. Shows a summary card (total hours) and a table with columns: User, Total Hours, Total Minutes. Includes CSV export. -- #}
+{% elif report_view == 'users' and user_data %}
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="card p-3 text-center"><small class="text-muted">Total Hours</small><h3 class="mb-0 fw-bold">{{ summary.total_hours }}h</h3></div></div>
+</div>
+<div class="card glass-card">
+    <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-people me-2 text-success"></i>User Productivity</span>
+        <a href="{% url 'export_csv' %}?view=timesheet&type={{ report_type }}&date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download me-1"></i>CSV</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive-custom"><table class="table table-hover mb-0">
+            <thead class="table-light"><tr><th>User</th><th>Total Hours</th><th>Total Minutes</th></tr></thead>
+            <tbody>
+                {% for ud in user_data %}
+                <tr><td>{{ ud.user.get_full_name|default:ud.user.username }}</td><td class="fw-semibold">{{ ud.hours }}h</td><td>{{ ud.minutes }}m</td></tr>
+                {% endfor %}
+            </tbody>
+        </table></div>
+    </div>
+</div>
+
+{# -- Section: Attendance report view (default) -- #}
+{# -- Renders when no report_view or report_view == 'attendance'. Shows four summary stat cards (Records, Hours, Overtime, Late) above a detailed attendance records table with columns: Employee, Date, In, Out, Hours, Late (badge), OT. Supports CSV and PDF export. Empty state when no attendances. -- #}
+{% else %}
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="card p-3 text-center"><small class="text-muted">Records</small><h3 class="mb-0 fw-bold">{{ summary.total_records|default:"0" }}</h3></div></div>
+    <div class="col-md-3"><div class="card p-3 text-center"><small class="text-muted">Hours</small><h3 class="mb-0 fw-bold">{{ summary.total_hours_sum|floatformat:1|default:"0" }}h</h3></div></div>
+    <div class="col-md-3"><div class="card p-3 text-center"><small class="text-muted">Overtime</small><h3 class="mb-0 fw-bold">{{ summary.total_overtime|default:"0" }}m</h3></div></div>
+    <div class="col-md-3"><div class="card p-3 text-center"><small class="text-muted">Late</small><h3 class="mb-0 fw-bold">{{ summary.total_late|default:"0" }}</h3></div></div>
+</div>
+
+<div class="card glass-card">
+    <div class="card-header bg-white py-3 px-4 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-table me-2 text-primary"></i>Attendance Records</span>
+        <div class="d-flex gap-2">
+            <a href="{% url 'export_csv' %}?type={{ report_type }}&date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-success"><i class="bi bi-download me-1"></i>CSV</a>
+            <a href="{% url 'export_pdf' %}?type={{ report_type }}&date={{ today|date:'Y-m-d' }}" class="btn btn-sm btn-outline-danger"><i class="bi bi-file-pdf me-1"></i>PDF</a>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive-custom"><table class="table table-hover mb-0">
+            <thead class="table-light"><tr><th>Employee</th><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Late</th><th>OT</th></tr></thead>
+            <tbody>
+                {% for a in attendances %}
+                <tr>
+                    <td>{{ a.user.get_full_name|default:a.user.username }}</td>
+                    <td>{{ a.date }}</td>
+                    <td>{{ a.check_in|date:"H:i"|default:"--" }}</td>
+                    <td>{{ a.check_out|date:"H:i"|default:"--" }}</td>
+                    <td>{{ a.total_hours|floatformat:2 }}</td>
+                    <td>{% if a.is_late %}<span class="badge badge-pill-custom badge-late">Late</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                    <td>{% if a.overtime_minutes > 0 %}{{ a.overtime_minutes }}m{% else %}<span class="text-muted">—</span>{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="text-center py-4 text-muted">No records for this period.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table></div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

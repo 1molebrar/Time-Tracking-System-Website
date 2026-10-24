@@ -1,0 +1,126 @@
+{# -- Page: Project Detail -- #}
+{# -- Shows all tasks for a project grouped by their status (e.g. To Do, In Progress, Done). #}
+{# -- Each task row shows title, assigned user, priority badge (non-medium only), estimated hours, #}
+{# -- and a start/stop timer button plus a dropdown for edit/trash/change-status actions. #}
+{# -- The right sidebar displays project info (client, status, total tasks, tracked time, #}
+{# -- description) and quick action links (add task, edit, archive/unarchive, trash, back). -- #}
+{% extends 'base.html' %}
+{% block title %}{{ project.name }} — WorkPulse{% endblock %}
+{% block page_title %}{{ project.name }}{% endblock %}
+{% block page_subtitle %}{% if project.client %}{{ project.client.name }} · {% endif %}{{ project.get_status_display }}{% endblock %}
+
+{% block content %}
+{# -- MAIN PANEL (left 8/12): tasks grouped by status -- #}
+<div class="row g-4">
+    <div class="col-lg-8">
+        {# -- Toolbar: task count badge and "Add Task" button -- #}
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-semibold mb-0">Tasks <span class="badge bg-primary bg-opacity-10 text-primary">{{ tasks|length }}</span></h5>
+            <a href="{% url 'task_add' project.id %}" class="btn btn-primary btn-sm btn-rounded"><i class="bi bi-plus-lg me-1"></i>Add Task</a>
+        </div>
+
+        {# -- Task groups: uses Django's regroup tag to group tasks by their display status #}
+        {% regroup tasks by get_status_display as task_groups %}
+        {% for group in task_groups %}
+        <div class="card glass-card mb-3">
+            {# -- Group header: status name (e.g. "In Progress") with count badge -- #}
+            <div class="card-header bg-white py-2 px-3 d-flex justify-content-between">
+                <span class="fw-semibold small">{{ group.grouper }}</span>
+                <span class="badge bg-secondary">{{ group.list|length }}</span>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for t in group.list %}
+                {# -- Individual task row: title, assignment info, priority badge, estimated hours, #}
+                {# -- timer start/stop, and dropdown menu with Edit/Trash/Set Status actions -- #}
+                <div class="list-group-item px-3 py-2 d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-semibold" style="font-size:0.85rem;">{{ t.title }}</div>
+                        <small class="text-muted">
+                            {% if t.assigned_to %}<i class="bi bi-person me-1"></i>{{ t.assigned_to.username }}{% endif %}
+                            {% if t.priority != 'medium' %}<span class="badge {% if t.priority == 'urgent' %}bg-danger{% elif t.priority == 'high' %}bg-warning text-dark{% else %}bg-info{% endif %} ms-2" style="font-size:0.6rem;">{{ t.get_priority_display }}</span>{% endif %}
+                            {% if t.estimated_hours %}<span class="ms-2">{{ t.estimated_hours }}h est.</span>{% endif %}
+                        </small>
+                    </div>
+                    <div class="d-flex gap-1 align-items-center">
+                        {# -- Timer button: shows stop (red) if this task has the active running timer, else start (green) -- #}
+                        {% if active_timer and active_timer.task_id == t.id and active_timer.is_running %}
+                        <a href="{% url 'timer_stop' %}" class="btn btn-sm btn-outline-danger"><i class="bi bi-stop-fill"></i></a>
+                        {% else %}
+                        <a href="{% url 'timer_start' t.id %}" class="btn btn-sm btn-outline-success"><i class="bi bi-play-fill"></i></a>
+                        {% endif %}
+                        {# -- Dropdown: Edit, Trash, and inline status change options -- #}
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown"><i class="bi bi-three-dots"></i></button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="{% url 'task_edit' t.id %}"><i class="bi bi-pencil me-2"></i>Edit</a></li>
+                                <li><a class="dropdown-item text-danger" href="{% url 'task_delete' t.id %}" onclick="return confirm('Move task &quot;{{ t.title }}&quot; to trash?')"><i class="bi bi-trash me-2"></i>Trash</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><h6 class="dropdown-header">Set Status</h6></li>
+                                                                {% for sk, sv in status_choices %}
+                                <li><a class="dropdown-item {% if t.status == sk %}active{% endif %}" href="{% url 'task_update_status' t.id %}?status={{ sk }}">{{ sv }}</a></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="list-group-item text-muted text-center py-3">No tasks in this group</div>
+                {% endfor %}
+            </div>
+        </div>
+        {% empty %}
+        {% include 'components/_empty_state.html' with icon='list-task' title='No tasks yet' message='Create your first task to start tracking.' %}
+        {% endfor %}
+    </div>
+
+    {# -- RIGHT SIDEBAR (right 4/12): project info and quick actions -- #}
+    <div class="col-lg-4">
+        {# -- Project Info card: client name, status badge, task count, total tracked time, description -- #}
+        <div class="card glass-card">
+            <div class="card-header bg-white py-3 px-4"><span class="fw-semibold">Project Info</span></div>
+            <div class="card-body p-4">
+                <div class="mb-3">
+                    <small class="text-muted d-block">Client</small>
+                    <strong>{% if project.client %}{{ project.client.name }}{% else %}<span class="text-muted">—</span>{% endif %}</strong>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted d-block">Status</small>
+                    <span class="badge {% if project.status == 'active' %}bg-success{% elif project.status == 'completed' %}bg-secondary{% else %}bg-light text-muted{% endif %}">{{ project.get_status_display }}</span>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted d-block">Total Tasks</small>
+                    <strong>{{ tasks|length }}</strong>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted d-block">Total Tracked Time</small>
+                    <strong>{% if total_hours > 0 %}{{ total_hours }}h {% endif %}{{ total_minutes }}m</strong>
+                </div>
+                {% if project.description %}
+                <div>
+                    <small class="text-muted d-block">Description</small>
+                    <p class="small mb-0">{{ project.description }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# -- Quick Actions card: add task, edit, archive/unarchive toggle, trash, back to list -- #}
+        <div class="card glass-card mt-3">
+            <div class="card-header bg-white py-3 px-4"><span class="fw-semibold">Quick Actions</span></div>
+            <div class="card-body p-3">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'task_add' project.id %}" class="btn btn-success btn-sm btn-rounded"><i class="bi bi-plus-lg me-1"></i>Add Task</a>
+                    <a href="{% url 'project_edit' project.id %}" class="btn btn-outline-secondary btn-sm btn-rounded"><i class="bi bi-pencil me-1"></i>Edit Project</a>
+                    {% if project.is_archived %}
+                    <a href="{% url 'project_unarchive' project.id %}" class="btn btn-outline-warning btn-sm btn-rounded"><i class="bi bi-archive me-1"></i>Unarchive</a>
+                    {% else %}
+                    <a href="{% url 'project_archive' project.id %}" class="btn btn-outline-warning btn-sm btn-rounded"><i class="bi bi-archive me-1"></i>Archive</a>
+                    {% endif %}
+                    <a href="{% url 'project_delete' project.id %}" class="btn btn-outline-danger btn-sm btn-rounded" onclick="return confirm('Move project &quot;{{ project.name }}&quot; to trash?')"><i class="bi bi-trash me-1"></i>Trash</a>
+                    <a href="{% url 'project_list' %}" class="btn btn-outline-secondary btn-sm btn-rounded"><i class="bi bi-arrow-left me-1"></i>Back to Projects</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

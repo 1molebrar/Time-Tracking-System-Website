@@ -1,0 +1,87 @@
+{# -- Component: Skeleton Loading Placeholders -- #}
+{# Renders animated shimmer placeholders while data is being loaded.      #}
+{# The `type` variable determines which skeleton variant to render:       #}
+{#                                                                         #}
+{# Variants:                                                               #}
+{#   type='card' (or omitted) — Generic card skeleton with 3 text lines    #}
+{#   type='stat-card'         — Statistic tile skeleton (number + label)   #}
+{#   type='table-row'         — Table row skeleton (avatar + 3 text cols   #}
+{#                              + pill badge). Uses `count` param for rows.#}
+{#   type='list'              — List item skeleton (avatar + 2 text lines  #}
+{#                              + pill). Uses `count` param for items.     #}
+{#   type='chart'             — Chart area skeleton (title + tall block)   #}
+{#                                                                         #}
+{# Parameters:                                                             #}
+{#   type   — Skeleton variant string (default: 'card')                   #}
+{#   count  — Number of repeated rows/items (default: 5 for table-row,    #}
+{#            4 for list). Simulated by Django's `|ljust` filter trick.    #}
+{# ======================================================================= #}
+{% if type == 'card' or not type %}
+<div class="skeleton-card-wrapper">
+    <div class="card skeleton-card-pulse">
+        <div class="card-body p-4">
+            <div class="skeleton skeleton-text w-50 mb-3"></div>
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text w-75"></div>
+            <div class="skeleton skeleton-text-sm mt-3"></div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if type == 'stat-card' %}
+<div class="skeleton-stat-wrapper">
+    <div class="card stat-card skeleton-card-pulse">
+        <div class="card-body">
+            <div class="skeleton skeleton-text-sm mb-2"></div>
+            <div class="skeleton" style="height:32px;width:80px;margin-bottom:8px;"></div>
+            <div class="skeleton skeleton-text-sm w-50"></div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if type == 'table-row' %}
+{% with count=count|default:5 %}
+{% for _ in 'x'|ljust:count %}
+<div class="skeleton-table-row">
+    <div class="d-flex align-items-center gap-3 py-2">
+        <div class="skeleton skeleton-circle flex-shrink-0"></div>
+        <div class="flex-grow-1">
+            <div class="skeleton skeleton-text w-50 mb-1"></div>
+            <div class="skeleton skeleton-text-sm w-25"></div>
+        </div>
+        <div class="skeleton skeleton-text-sm w-15"></div>
+        <div class="skeleton skeleton-text-sm w-10"></div>
+        <div class="skeleton" style="width:60px;height:24px;border-radius:12px;"></div>
+    </div>
+</div>
+{% endfor %}
+{% endwith %}
+{% endif %}
+
+{% if type == 'list' %}
+{% with count=count|default:4 %}
+<div class="skeleton-list">
+    {% for _ in 'x'|ljust:count %}
+    <div class="d-flex align-items-center gap-3 py-3 border-bottom border-opacity-10">
+        <div class="skeleton skeleton-circle"></div>
+        <div class="flex-grow-1">
+            <div class="skeleton skeleton-text w-40 mb-1"></div>
+            <div class="skeleton skeleton-text-sm w-60"></div>
+        </div>
+        <div class="skeleton" style="width:70px;height:28px;border-radius:14px;"></div>
+    </div>
+    {% endfor %}
+</div>
+{% endwith %}
+{% endif %}
+
+{% if type == 'chart' %}
+<div class="card">
+    <div class="card-body p-4">
+        <div class="skeleton skeleton-text w-25 mb-4"></div>
+        <div class="skeleton" style="height:250px;width:100%;border-radius:var(--radius-md);"></div>
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,36 @@
+{# -- Component: Empty State Placeholder -- #}
+{# Renders a centered empty-state message with an optional icon, title,    #}
+{# description text, and a call-to-action button. Used when lists, tables, #}
+{# or dashboards have no data to display.                                 #}
+{#                                                                         #}
+{# Parameters:                                                             #}
+{#   icon        — Bootstrap icon name (e.g. 'inbox', 'clock');            #}
+{#                defaults to 'bi-inbox' if omitted                        #}
+{#   title       — Heading text; defaults to 'Nothing here yet'            #}
+{#   message     — Optional descriptive paragraph below the title          #}
+{#   action_url  — URL the CTA button links to (required for button)       #}
+{#   action_text — Button label (required for button)                      #}
+{#                                                                         #}
+{# Logic:                                                                  #}
+{#   - Shows the icon block only if `icon` is provided; otherwise uses     #}
+{#     a default inbox icon                                                #}
+{#   - Shows the message paragraph only if `message` is truthy             #}
+{#   - Shows the action button only when both `action_url` and             #}
+{#     `action_text` are truthy                                            #}
+{# ======================================================================= #}
+<div class="empty-state">
+    {% if icon %}
+    <div class="empty-state-icon"><i class="bi bi-{{ icon }}"></i></div>
+    {% else %}
+    <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
+    {% endif %}
+    <h5 class="empty-state-title">{{ title|default:'Nothing here yet' }}</h5>
+    {% if message %}
+    <p class="empty-state-text">{{ message }}</p>
+    {% endif %}
+    {% if action_url and action_text %}
+    <a href="{{ action_url }}" class="btn btn-primary btn-sm btn-rounded mt-2">
+        <i class="bi bi-plus-lg me-1"></i>{{ action_text }}
+    </a>
+    {% endif %}
+</div>

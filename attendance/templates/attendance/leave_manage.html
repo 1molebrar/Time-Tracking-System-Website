@@ -1,0 +1,41 @@
+{# -- Page: Leave Management (Manager View) -- #}
+{# Lists all leave requests across the organisation for managers to review and take action. #}
+{# Each row includes a "Review" button linking to the leave detail page with approve/reject forms. #}
+{% extends 'base.html' %}
+{% block title %}Manage Leave Requests — WorkPulse{% endblock %}
+{% block page_title %}Leave Requests{% endblock %}
+{% block page_subtitle %}Review and manage employee leave requests{% endblock %}
+
+{% block content %}
+<div class="card glass-card">
+    <div class="card-body p-0">
+        <div class="table-responsive-custom">
+            {# -- Leave Management Table -- #}
+            {# Columns: Employee (name with person icon), Type (leave category), Dates (start-end range), #}
+            {# Days (total day count with 'd' suffix), Status (color-coded badge), #}
+            {# Submitted (timestamp of creation), Action (Review button linking to leave_detail). #}
+            <table class="table table-hover mb-0">
+                <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Submitted</th><th></th></tr></thead>
+                <tbody>
+                    {% for leave in leaves %}
+                    <tr>
+                        <td style="font-size:0.82rem;"><i class="bi bi-person me-2" style="color:var(--accent);"></i>{{ leave.employee.get_full_name|default:leave.employee.username }}</td>
+                        <td style="font-size:0.78rem;">{{ leave.get_leave_type_display }}</td>
+                        <td style="font-size:0.78rem;color:#94A3B8;">{{ leave.start_date|date:"d M" }} — {{ leave.end_date|date:"d M Y" }}</td>
+                        <td style="font-size:0.78rem;">{{ leave.total_days }}d</td>
+                        <td><span class="badge" style="{{ leave.status_badge }}">{{ leave.get_status_display }}</span></td>
+                        <td style="font-size:0.72rem;color:#64748B;">{{ leave.created_at|date:"d M Y H:i" }}</td>
+                        <td class="text-end">
+                            {# Review button links to the individual leave detail view where approve/reject actions are available #}
+                            <a href="{% url 'leave_detail' leave.id %}" class="btn btn-sm btn-rounded" style="background:rgba(129,140,248,0.1);color:#A5B4FC;border:1px solid rgba(129,140,248,0.15);padding:3px 12px;font-size:0.68rem;"><i class="bi bi-eye me-1"></i>Review</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="7" class="text-center py-5" style="color:#64748B;">No leave requests found</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

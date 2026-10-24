@@ -1,0 +1,1243 @@
+{# -- Base Layout (base.html) -- #}
+{% comment %} Root template extended by all pages: HTML structure, dark theme, nav, notifications, timer, toasts, JS. {% endcomment %}
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {# -- Force no caching so time/attendance data is always fresh -- #}
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    {# -- Page title: overridable per-page via {% block title %} -- #}
+    <title>{% block title %}WorkPulse{% endblock %}</title>
+    {# -- External CDN assets: Bootstrap CSS, Bootstrap Icons, Google Fonts (Inter + JetBrains Mono), Chart.js -- #}
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    {% load static %}
+    {% load rbac_extras %}          {# Custom template tags for role-based access checks #}
+    {% block extra_head %}{% endblock %}  {# Hook for child templates to inject <head> content #}
+    <style>
+        {# -- CSS Custom Properties (Dark Theme Design Tokens) -- #}
+        {% comment %} Design tokens: color palette, spacing, radii, shadows used throughout the UI. {% endcomment %}
+        :root {
+            --bg-primary: #0F172A;
+            --bg-secondary: #1E293B;
+            --bg-tertiary: #111827;
+            --bg-card: #1E293B;
+            --bg-card-hover: #273548;
+            --bg-sidebar: #0B1120;
+            --bg-elevated: #334155;
+            --bg-navitem-hover: rgba(99, 102, 241, 0.08);
+            --bg-navitem-active: rgba(99, 102, 241, 0.15);
+            --border-color: rgba(148, 163, 184, 0.12);
+            --border-light: rgba(148, 163, 184, 0.06);
+            --accent: #2563EB;
+            --accent-hover: #3B82F6;
+            --accent-glow: rgba(37, 99, 235, 0.25);
+            --success: #22C55E;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --info: #06B6D4;
+            --text-primary: #F1F5F9;
+            --text-secondary: #CBD5E1;
+            --text-muted: #64748B;
+            --sidebar-width: 260px;
+            --sidebar-collapsed: 72px;
+            --timer-bar-height: 60px;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --shadow-card: 0 1px 2px rgba(0,0,0,0.3);
+            --shadow-elevated: 0 8px 30px rgba(0,0,0,0.4);
+            --shadow-glow: 0 0 24px rgba(99,102,241,0.12);
+        }
+        {# -- Base element reset -- #}
+        {# All elements use Inter, body has dark background and full height #}
+        * { font-family: 'Inter', -apple-system, sans-serif; }
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        {# -- Typography defaults -- #}
+        {# Headings bright white, body text secondary gray, links use accent hover, small/strong muted #}
+        h1, h2, h3, h4, h5, h6 { color: var(--text-primary); font-weight: 600; letter-spacing: -0.02em; }
+        p { color: var(--text-secondary); }
+        a { color: var(--accent-hover); transition: color 0.15s; }
+        a:hover { color: #A5B4FC; }
+        small, .small { color: var(--text-muted); }
+        strong { color: var(--text-primary); }
+
+        {# -- Custom scrollbar (WebKit) -- #}
+        {# Thin, transparent track, semi-transparent thumb that darkens on hover #}
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.15); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,0.3); }
+
+        {# -- Sidebar navigation (admin/manager) -- #}
+        {# Fixed left panel, full viewport height, slides via transform, has brand area and scrollable menu #}
+        .sidebar {
+            position: fixed; top: 0; left: 0; height: 100vh; width: var(--sidebar-width);
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
+            z-index: 1000;
+            transform: translateX(0);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.35s ease;
+            overflow-y: auto; overflow-x: hidden;
+        }
+        .sidebar.closed {
+            transform: translateX(-100%);
+        }
+        .sidebar-brand {
+            display: flex; align-items: center; padding: 20px 28px 16px;
+            min-height: 68px; border-bottom: 1px solid var(--border-light);
+        }
+        .sidebar-brand .brand-icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, #EF4444, #F87171);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            box-shadow: 0 4px 12px var(--accent-glow);
+        }
+        .sidebar-brand .brand-text {
+            color: #fff; font-weight: 700; font-size: 1.1rem; margin-left: 12px;
+            white-space: nowrap; letter-spacing: -0.3px;
+        }
+        .sidebar-menu { padding: 12px 0 80px; }
+        .sidebar-menu .menu-label {
+            padding: 20px 20px 6px; font-size: 0.6rem; text-transform: uppercase;
+            letter-spacing: 1.2px; color: rgba(148,163,184,0.4); font-weight: 600;
+        }
+        .sidebar-menu .nav-item {
+            display: flex; align-items: center; padding: 10px 16px; margin: 2px 12px;
+            color: rgba(148,163,184,0.6); text-decoration: none; border-radius: var(--radius-sm);
+            transition: all 0.2s ease; font-size: 0.85rem; font-weight: 500;
+            position: relative;
+        }
+        .sidebar-menu .nav-item:hover {
+            background: var(--bg-navitem-hover); color: var(--text-secondary);
+        }
+        .sidebar-menu .nav-item:hover .nav-icon-bg { transform: scale(1.05); }
+        .sidebar-menu .nav-item .nav-icon-bg { transition: transform 0.2s ease; }
+        .sidebar-menu .nav-item.active {
+            background: var(--bg-navitem-active);
+            color: #fff;
+            box-shadow: inset 3px 0 0 var(--accent);
+        }
+        .sidebar-menu .nav-item i { width: 22px; font-size: 1.05rem; text-align: center; flex-shrink: 0; }
+        .sidebar-menu .nav-item .badge-sidebar {
+            margin-left: auto; background: var(--danger); color: #fff;
+            font-size: 0.6rem; padding: 2px 7px; border-radius: 10px; font-weight: 600;
+        }
+        .sidebar-menu .nav-item .nav-icon-bg {
+            width: 32px; height: 32px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            margin-right: 12px; flex-shrink: 0;
+        }
+        .sidebar-menu .nav-item.active .nav-icon-bg { background: var(--accent-glow) !important; }
+        .sidebar-menu .nav-item.active i { color: #fff !important; }
+
+        {# -- Main content wrapper -- #}
+        {# Offset by sidebar width on desktop; shrinks when sidebar collapses #}
+        .main-content {
+            margin-left: var(--sidebar-width);
+            min-height: 100vh;
+            transition: margin-left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        {# -- Top header bar (sticky) -- #}
+        {# Contains page title, search, notifications, user info, logout #}
+        .top-header {
+            background: rgba(15, 23, 42, 0.85);
+            padding: 0 28px;
+            display: flex; align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+            position: sticky; top: 0; z-index: 999;
+            min-height: 60px;
+            left: var(--sidebar-width);
+            transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .top-header .page-title h4 { margin: 0; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.3px; }
+        .top-header .page-title span { font-size: 0.72rem; }
+        .top-header .user-area { display: flex; align-items: center; gap: 6px; }
+        .page-content {
+            padding: 24px 28px 100px;
+            animation: fadeIn 0.3s ease;
+        }
+        .sidebar-toggle {
+            background: none; border: none;
+            color: var(--text-muted); font-size: 1.2rem; cursor: pointer;
+            padding: 6px; border-radius: var(--radius-sm);
+            transition: background 0.2s;
+        }
+        .sidebar-toggle:hover { background: var(--bg-navitem-hover); }
+        .sidebar-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            z-index: 999; opacity: 0; pointer-events: none;
+            transition: opacity 0.35s ease;
+        }
+        .sidebar-overlay.show { opacity: 1; pointer-events: auto; }
+
+        {# -- Base card component -- #}
+        {# Dark background, subtle border, rounded corners, hover elevation effect #}
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-card);
+            transition: all 0.25s ease;
+        }
+        .card:hover { box-shadow: var(--shadow-elevated); }
+        .card-header {
+            background: transparent !important;
+            font-weight: 600;
+            border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color) !important;
+        }
+        {# -- Stat card (dashboard metric tiles) -- #}
+        {# Hover lift effect, colored left border, used for employee counts, hours, etc. #}
+        .stat-card {
+            border-radius: var(--radius-lg);
+            overflow: hidden; position: relative; cursor: default;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-elevated) !important;
+            border-color: rgba(148,163,184,0.2);
+        }
+        .stat-card .live-badge {
+            font-size: 0.55rem; background: rgba(255,255,255,0.08);
+            padding: 3px 10px; border-radius: 20px; font-weight: 600; letter-spacing: 0.3px;
+        }
+        .stat-card h2 { font-size: 1.8rem; }
+
+        {# -- Status badge variants -- #}
+        {# .badge-pill-custom is the base; .badge-late/present/overtime/active color-code attendance states #}
+        .badge-pill-custom { padding: 4px 12px; border-radius: 50px; font-size: 0.7rem; font-weight: 600; }
+        .badge-late { background: rgba(239,68,68,0.15); color: #FCA5A5; }
+        .badge-present { background: rgba(34,197,94,0.15); color: #86EFAC; }
+        .badge-overtime { background: rgba(245,158,11,0.15); color: #FCD34D; }
+        .badge-active { background: rgba(6,182,212,0.15); color: #67E8F9; }
+
+        {# -- Button styles -- #}
+        {# .btn-rounded for pill shape; state variants (primary/success/warning/danger) use theme colors #}
+        .btn-rounded { border-radius: 50px; font-weight: 600; padding: 8px 24px; transition: all 0.2s; }
+        .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); box-shadow: 0 4px 14px var(--accent-glow); }
+        .btn-success { background: var(--success); border-color: var(--success); color: #fff; }
+        .btn-success:hover { background: #16A34A; border-color: #16A34A; box-shadow: 0 4px 14px rgba(34,197,94,0.25); }
+        .btn-warning { background: var(--warning); border-color: var(--warning); color: #0F172A; }
+        .btn-warning:hover { background: #D97706; border-color: #D97706; }
+        .btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+        .btn-danger:hover { background: #DC2626; border-color: #DC2626; box-shadow: 0 4px 14px rgba(239,68,68,0.25); }
+        .btn-outline-secondary { color: var(--text-muted); border-color: var(--border-color); }
+        .btn-outline-secondary:hover { background: var(--bg-elevated); color: var(--text-primary); border-color: rgba(148,163,184,0.3); }
+        .btn-outline-primary { color: var(--accent-hover); border-color: var(--accent); }
+        .btn-outline-primary:hover { background: var(--accent); color: #fff; }
+        .btn-outline-success { color: var(--success); border-color: var(--success); }
+        .btn-outline-success:hover { background: var(--success); color: #0F172A; }
+        .btn-outline-danger { color: var(--danger); border-color: var(--danger); }
+        .btn-outline-danger:hover { background: var(--danger); color: #fff; }
+
+        {# -- Action card (grid of quick-action links) -- #}
+        {# Used on dashboards for quick navigation; hover lifts and highlights border #}
+        .btn-action-card {
+            border-radius: var(--radius-md); padding: 16px 12px; text-align: center; height: 100%;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid var(--border-color);
+            background: var(--bg-card);
+            text-decoration: none; display: block;
+        }
+        .btn-action-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-elevated);
+            border-color: var(--accent);
+            background: var(--bg-card-hover);
+        }
+        .btn-action-card i { font-size: 1.4rem; display: block; margin-bottom: 8px; }
+        .btn-action-card span { font-size: 0.7rem; font-weight: 600; color: var(--text-muted); display: block; }
+        .btn-action-card:hover span { color: var(--text-secondary); }
+
+        {# -- Custom progress bar -- #}
+        {# Thin 6px track, used for shift completion percentage #}
+        .progress-custom { height: 6px; border-radius: 10px; background: rgba(148,163,184,0.08); overflow: hidden; }
+        .progress-custom .progress-bar-custom { height: 100%; border-radius: 10px; transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        {# -- Data table styles -- #}
+        {# Subtle dark theme tables with uppercase header labels, hover rows, transparent backgrounds #}
+        .table { color: var(--text-secondary); margin-bottom: 0; }
+        .table th {
+            border-top: none; border-bottom: 1px solid var(--border-color);
+            font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.5px; color: var(--text-muted);
+            padding: 12px 16px;
+        }
+        .table td { padding: 12px 16px; vertical-align: middle; font-size: 0.82rem; border-color: var(--border-color); }
+        .table tbody tr { transition: background 0.15s; }
+        .table tbody tr:hover { background: rgba(148,163,184,0.03); }
+        .table > :not(caption) > * > * { background: transparent; border-bottom-color: var(--border-color); }
+
+        {# -- Shift progress ring (SVG circular gauge) -- #}
+        {# Rotated -90deg so progress starts from top; hours text centered inside #}
+        .shift-ring { width: 90px; height: 90px; position: relative; }
+        .shift-ring svg { transform: rotate(-90deg); }
+        .shift-ring .hours-text {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); text-align: center;
+        }
+        .shift-ring .hours-text strong { font-size: 1.2rem; display: block; line-height: 1.2; }
+
+        {# -- Global active timer bar (fixed bottom) -- #}
+        {# Shown when a user has a running timer; displays task name, elapsed time, stop button #}
+        .timer-bar {
+            position: fixed; bottom: 0; left: var(--sidebar-width); right: 0;
+            height: var(--timer-bar-height);
+            background: rgba(15, 23, 42, 0.9);
+            border-top: 1px solid var(--border-color);
+            z-index: 999;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 28px;
+            transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .timer-bar .timer-info { display: flex; align-items: center; gap: 14px; }
+        .timer-bar .pulse {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 16px rgba(34,197,94,0.4);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        .timer-bar .project-name { font-size: 0.75rem; }
+        .timer-bar .task-name { font-size: 0.88rem; font-weight: 600; }
+        .timer-bar .timer-clock {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.3rem; font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            min-width: 100px;
+            color: var(--accent-hover);
+            letter-spacing: 0.5px;
+        }
+        body.has-timer .page-content { padding-bottom: calc(24px + var(--timer-bar-height)); }
+
+        {# -- List group overrides (transparent background) -- #}
+        .list-group-item { background: transparent; border-color: var(--border-color); }
+
+        {# -- Form controls -- #}
+        {# Dark inputs with accent focus glow #}
+        .form-control, .form-select {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s;
+        }
+        .form-control:focus, .form-select:focus {
+            background: var(--bg-primary);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+        .form-control::placeholder { color: var(--text-muted); }
+
+        {# -- Input group addon -- #}
+        .input-group-text {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        {# -- Dropdown menus -- #}
+        {# Dark glass-like dropdown with rounded items and hover highlight #}
+        .dropdown-menu {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-elevated);
+            padding: 6px;
+        }
+        .dropdown-menu .dropdown-item {
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            font-size: 0.82rem;
+            transition: all 0.15s;
+        }
+        .dropdown-menu .dropdown-item:hover { background: var(--bg-navitem-hover); }
+        .dropdown-header { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 12px; }
+        .dropdown-divider { border-color: var(--border-color); }
+
+        {# -- Animations -- #}
+        {# fadeIn: used for page content entrance; shimmer: used for skeleton loading animation #}
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+        .fade-in { animation: fadeIn 0.3s ease both; }
+
+        {# -- Skeleton loading placeholders -- #}
+        {# Animated shimmer gradient for content that is still loading #}
+        .skeleton {
+            background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s ease-in-out infinite;
+            border-radius: var(--radius-sm);
+        }
+        .skeleton-text { height: 14px; width: 100%; margin-bottom: 8px; }
+        .skeleton-text-sm { height: 10px; width: 60%; margin-bottom: 6px; }
+        .skeleton-circle { width: 36px; height: 36px; border-radius: 50%; }
+        .skeleton-card { height: 120px; border-radius: var(--radius-md); }
+        .skeleton-card-pulse { animation: shimmer 1.5s ease-in-out infinite; }
+        .skeleton-stat-wrapper .card { min-height: 100px; }
+
+        {# -- Empty state placeholder -- #}
+        {# Centered layout with icon, title, description, optional action button #}
+        .empty-state {
+            text-align: center; padding: 48px 20px; max-width: 360px; margin: 0 auto;
+        }
+        .empty-state-icon {
+            width: 72px; height: 72px; margin: 0 auto 20px;
+            background: rgba(99, 102, 241, 0.08);
+            border-radius: 20px; display: flex; align-items: center; justify-content: center;
+        }
+        .empty-state-icon i { font-size: 2rem; color: var(--accent-hover); }
+        .empty-state-title { font-size: 1.05rem; margin-bottom: 8px; }
+        .empty-state-text { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 0; }
+
+        {# -- Toast notification system -- #}
+        {# Fixed top-right container; each toast has animated slide-in, dismiss button, and color-coded left border #}
+        .toast-container {
+            position: fixed; top: 20px; right: 20px; z-index: 9999;
+            display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+            max-width: 380px; width: 100%;
+        }
+        .toast-container .toast {
+            pointer-events: auto;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-elevated);
+            overflow: hidden; animation: toastIn 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .toast-container .toast.toast-out { animation: toastOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateX(100%) scale(0.9); }
+            to { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @keyframes toastOut {
+            from { opacity: 1; transform: translateX(0) scale(1); }
+            to { opacity: 0; transform: translateX(100%) scale(0.9); }
+        }
+        .toast-container .toast .toast-header {
+            background: transparent; border: none; padding: 12px 16px 4px;
+            font-size: 0.82rem; font-weight: 600; color: var(--text-primary);
+        }
+        .toast-container .toast .toast-body {
+            padding: 4px 16px 14px; font-size: 0.78rem; color: var(--text-muted);
+        }
+        .toast-container .toast .toast-icon {
+            width: 28px; height: 28px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center; margin-right: 10px; flex-shrink: 0;
+        }
+        .toast-container .toast.toast-success { border-left: 3px solid var(--success); }
+        .toast-container .toast.toast-error { border-left: 3px solid var(--danger); }
+        .toast-container .toast.toast-warning { border-left: 3px solid var(--warning); }
+        .toast-container .toast.toast-info { border-left: 3px solid var(--info); }
+        .toast-success .toast-icon { background: rgba(34,197,94,0.12); color: var(--success); }
+        .toast-error .toast-icon { background: rgba(239,68,68,0.12); color: var(--danger); }
+        .toast-warning .toast-icon { background: rgba(245,158,11,0.12); color: var(--warning); }
+        .toast-info .toast-icon { background: rgba(6,182,212,0.12); color: var(--info); }
+
+        {# -- Glassmorphism effects -- #}
+        {# Semi-transparent backgrounds with backdrop blur for a frosted-glass look #}
+        .glass {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(148, 163, 184, 0.08);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.5);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.08);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-card);
+        }
+        .glass-card:hover {
+            box-shadow: var(--shadow-elevated);
+            border-color: rgba(148, 163, 184, 0.15);
+        }
+        .glass-nav {
+            background: rgba(11, 17, 32, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+        }
+        .glass-dropdown {
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        {# -- Scrollable table wrapper -- #}
+        {# Adds horizontal scroll with custom thin scrollbar for wide tables #}
+        .table-responsive-custom {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .table-responsive-custom .table { min-width: 650px; }
+        .table-responsive-custom::-webkit-scrollbar { height: 4px; }
+        .table-responsive-custom::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+
+        {# -- Notification list item -- #}
+        {# Each notification row with unread dot, title, timestamp #}
+        .notif-item {
+            display: flex; align-items: flex-start; gap: 10px;
+            padding: 10px 14px; border-radius: var(--radius-sm);
+            transition: background 0.15s; cursor: pointer;
+        }
+        .notif-item:hover { background: var(--bg-navitem-hover); }
+        .notif-item.unread { background: rgba(37,99,235,0.06); }
+        .notif-item .notif-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: var(--accent); flex-shrink: 0; margin-top: 6px;
+        }
+        .notif-item .notif-content { flex: 1; min-width: 0; }
+        .notif-item .notif-title { font-size: 0.78rem; font-weight: 500; margin-bottom: 2px; }
+        .notif-item .notif-time { font-size: 0.65rem; }
+        .notif-dropdown { width: 340px; max-height: 380px; overflow-y: auto; padding: 6px; }
+
+        {# -- Small screen modal tweaks -- #}
+        @media (max-width: 576px) {
+            .modal-dialog { margin: 8px; }
+            .modal-content { border-radius: var(--radius-md); }
+            .modal-body { padding: 16px; }
+            .modal-header, .modal-footer { padding: 12px 16px; }
+        }
+
+        {# -- Pagination controls -- #}
+        .pagination .page-link {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            margin: 0 2px;
+            padding: 4px 10px;
+            font-size: 0.78rem;
+            transition: all 0.15s;
+        }
+        .pagination .page-link:hover { background: var(--bg-navitem-hover); border-color: var(--accent); }
+        .pagination .page-item.active .page-link { background: var(--accent); border-color: var(--accent); }
+
+        {# -- Search dropdown -- #}
+        .search-dropdown { min-width: 360px; max-height: 420px; overflow-y: auto; }
+
+        {# -- Mobile bottom navigation bar -- #}
+        {# Fixed at bottom on small screens (<768px); contains icon+label nav items #}
+        .mobile-bottom-nav {
+            display: none;
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: rgba(15, 23, 42, 0.95);
+            border-top: 1px solid var(--border-color);
+            z-index: 1001;
+            padding: 6px 0 env(safe-area-inset-bottom, 6px);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .mobile-bottom-nav .nav-items { display: flex; justify-content: space-around; align-items: center; }
+        .mobile-bottom-nav .nav-item {
+            display: flex; flex-direction: column; align-items: center;
+            text-decoration: none; color: var(--text-muted);
+            padding: 4px 8px; border-radius: var(--radius-sm);
+            transition: all 0.2s; min-width: 48px;
+        }
+        .mobile-bottom-nav .nav-item.active { color: var(--accent-hover); }
+        .mobile-bottom-nav .nav-item i { font-size: 1.15rem; }
+        .mobile-bottom-nav .nav-item span { font-size: 0.55rem; font-weight: 500; margin-top: 1px; }
+        .mobile-bottom-nav .nav-item .badge-mobile {
+            position: absolute; top: -4px; right: -6px;
+            background: var(--danger); color: #fff;
+            font-size: 0.45rem; padding: 1px 5px; border-radius: 10px; font-weight: 600;
+        }
+        .mobile-bottom-nav .nav-item .nav-icon-wrap { position: relative; display: inline-flex; }
+
+        {# -- Sidebar + main content sibling layout -- #}
+        {# When sidebar is closed, main content expands full width; when open, it's offset #}
+        .sidebar.closed ~ .main-content { margin-left: 0; }
+        .sidebar.closed ~ .main-content .top-header { left: 0; }
+        .sidebar.open ~ .main-content, .sidebar:not(.closed) ~ .main-content { margin-left: var(--sidebar-width); }
+        .sidebar.open ~ .main-content .top-header, .sidebar:not(.closed) ~ .main-content .top-header { left: var(--sidebar-width); }
+
+        {# -- Desktop sidebar behavior -- #}
+        {# Sidebar slides in/out via translateX, overlay hidden #}
+        @media (min-width: 769px) {
+            .sidebar { transform: translateX(0); }
+            .sidebar.open { transform: translateX(0); }
+            .sidebar.closed { transform: translateX(-100%); }
+            .sidebar.closed ~ .timer-bar { left: 0; }
+            .sidebar.open ~ .timer-bar, .sidebar ~ .timer-bar { left: var(--sidebar-width); }
+            .sidebar-overlay { display: none; }
+        }
+
+        {# -- Mobile sidebar behavior -- #}
+        {# Sidebar hidden by default, opens as overlay; mobile bottom nav shown; timer bar adjusts for bottom nav #}
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); width: var(--sidebar-width); }
+            .sidebar.open { transform: translateX(0); box-shadow: 4px 0 30px rgba(0,0,0,0.5); }
+            .sidebar.closed { transform: translateX(-100%); }
+            .sidebar.open ~ .main-content, .sidebar ~ .main-content { margin-left: 0; }
+            .sidebar.open ~ .main-content .top-header, .sidebar ~ .main-content .top-header { left: 0; }
+            .sidebar ~ .timer-bar { left: 0; }
+            .page-content { padding: 16px; padding-bottom: 80px; }
+            .top-header { padding: 0 16px; min-height: 56px; }
+            .mobile-bottom-nav { display: block; }
+            .timer-bar { left: 0; padding: 0 16px; bottom: 52px; }
+            body.has-timer .page-content { padding-bottom: calc(80px + var(--timer-bar-height)); }
+        }
+        {# -- Extra small screen adjustments -- #}
+        @media (max-width: 480px) {
+            .stat-card h2 { font-size: 1.3rem; }
+            .btn-action-card i { font-size: 1.2rem; }
+            .page-content { padding: 12px; padding-bottom: 76px; }
+        }
+        {# -- Print styles -- #}
+        {# Hide chrome (sidebar, header, timer, navs); flatten colors to black/white #}
+        @media print {
+            .sidebar, .top-header, .timer-bar, .btn-action-card,
+            .mobile-bottom-nav, .sidebar-overlay { display: none !important; }
+            .main-content { margin-left: 0 !important; }
+            body { background: #fff; color: #000; }
+            .card { border: 1px solid #ddd; box-shadow: none; }
+        }
+
+        {# -- Utility overrides -- #}
+        {# Bootstrap component dark-theme overrides for close buttons, modals, alerts, borders #}
+        .btn-close { filter: invert(0.7) brightness(1.2); }
+        .btn-close:hover { filter: invert(1); }
+        .modal-content { background: var(--bg-card); border: 1px solid var(--border-color); }
+        .modal-header, .modal-footer { border-color: var(--border-color); }
+        hr { border-color: var(--border-color); opacity: 0.5; }
+        .text-muted { color: var(--text-muted) !important; }
+        .text-primary { color: var(--accent-hover) !important; }
+        .text-success { color: var(--success) !important; }
+        .text-warning { color: var(--warning) !important; }
+        .text-danger { color: var(--danger) !important; }
+        .text-info { color: var(--info) !important; }
+        .bg-primary { background-color: var(--accent) !important; }
+        .bg-success { background-color: var(--success) !important; }
+        .bg-warning { background-color: var(--warning) !important; }
+        .bg-danger { background-color: var(--danger) !important; }
+        .bg-info { background-color: var(--info) !important; }
+        .table-light { background: var(--bg-secondary) !important; }
+        .alert { border: none; border-radius: var(--radius-md); }
+        .border-bottom { border-color: var(--border-color) !important; }
+        .border-top { border-color: var(--border-color) !important; }
+        .border { border-color: var(--border-color) !important; }
+        .nav-link { color: var(--text-muted); }
+        .nav-link:hover { color: var(--text-primary); }
+        .navbar-brand { color: var(--text-primary) !important; }
+        .navbar-toggler { border-color: var(--border-color) !important; }
+    </style>
+</head>
+<body{% if user.is_authenticated %} data-user-id="{{ user.id }}"{% endif %}>
+
+    {# -- Overlay for mobile sidebar (tapping it closes the sidebar) -- #}
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+    {# ==================================================================== #}
+    {# SECTION: Admin / Manager sidebar navigation                         #}
+    {# Only shown for users with role 'admin' or 'manager'. Contains links  #}
+    {# to Dashboard, Projects, Task Board, Calendar, Timesheet, Meetings,   #}
+    {# Employees, Clients, Attendance Reports, Export, Trash, and Admin     #}
+    {# Panel (superuser only). Each nav item highlights when its URL name   #}
+    {# matches the current page. Permission checks gate certain links.      #}
+    {# ==================================================================== #}
+    {% if user.is_authenticated and user.profile.role in 'admin,manager' %}
+    <nav class="sidebar" id="sidebar">
+        {# -- Brand logo area with heart icon SVG -- #}
+        <div class="sidebar-brand">
+            <div class="brand-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="rgba(255,255,255,0.2)"/>
+                    <circle cx="12" cy="12" r="3" fill="#fff" opacity="0.6"/>
+                    <path d="M12 9v3l2 2" stroke="#fff" stroke-width="1.5" opacity="0.8"/>
+                </svg>
+            </div>
+            <span class="brand-text">WorkPulse</span>
+        </div>
+        <div class="sidebar-menu">
+            {# -- Main navigation group -- #}
+            <div class="menu-label">Main</div>
+            <a href="{% if user.profile.role == 'admin' %}{% url 'admin_dashboard' %}{% else %}{% url 'manager_dashboard' %}{% endif %}"
+               class="nav-item {% if request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'manager_dashboard' %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(37,99,235,0.12);"><i class="bi bi-grid-1x2-fill" style="color:#60A5FA;"></i></span><span>Dashboard</span>
+            </a>
+            {% if perms.attendance.can_view_projects %}
+            <a href="{% url 'project_list' %}" class="nav-item {% if 'project' in request.resolver_match.url_name %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(34,197,94,0.12);"><i class="bi bi-folder" style="color:#86EFAC;"></i></span><span>Projects</span>
+            </a>
+            {% endif %}
+            {% if perms.attendance.can_view_tasks %}
+            <a href="{% url 'task_board' %}" class="nav-item {% if request.resolver_match.url_name == 'task_board' %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(251,191,36,0.12);"><i class="bi bi-kanban" style="color:#FCD34D;"></i></span><span>Task Board</span>
+            </a>
+            {% endif %}
+            <a href="{% url 'calendar_view' %}" class="nav-item {% if 'calendar' in request.resolver_match.url_name %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(168,85,247,0.12);"><i class="bi bi-calendar3" style="color:#C084FD;"></i></span><span>Calendar</span>
+            </a>
+            {% if perms.attendance.can_view_time_entries %}
+            <a href="{% url 'timesheet' %}" class="nav-item {% if 'timesheet' in request.resolver_match.url_name %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(6,182,212,0.12);"><i class="bi bi-calendar-week" style="color:#67E8F9;"></i></span><span>Timesheet</span>
+            </a>
+            {% endif %}
+            <a href="{% url 'meeting_list' %}" class="nav-item {% if 'meeting' in request.resolver_match.url_name %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(236,72,153,0.12);"><i class="bi bi-people" style="color:#F9A8D4;"></i></span><span>Meetings</span>
+            </a>
+            {% if perms.accounts.can_manage_users %}
+            <div class="menu-label">Management</div>
+            {# -- Employee list (requires can_manage_users permission) -- #}
+            <a href="{% url 'employee_list' %}" class="nav-item {% if 'employee' in request.resolver_match.url_name %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(99,102,241,0.12);"><i class="bi bi-people-fill" style="color:#A5B4FC;"></i></span><span>Employees</span>
+            </a>
+            {% endif %}
+            {# -- Client list (requires can_view_clients permission) -- #}
+            {% if perms.attendance.can_view_clients %}
+            <a href="{% url 'client_list' %}" class="nav-item {% if 'client' in request.resolver_match.url_name %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(139,92,246,0.12);"><i class="bi bi-building" style="color:#C4B5FD;"></i></span><span>Clients</span>
+            </a>
+            {% endif %}
+            {# -- Attendance Reports sub-menu (requires can_view_reports permission) -- #}
+            {# Shows Daily, Weekly, Monthly views; each passes a query param to the same reports URL #}
+            {% if perms.attendance.can_view_reports %}
+            <div class="menu-label">Attendance Reports</div>
+            <a href="{% url 'reports' %}?view=attendance&type=daily" class="nav-item {% if request.GET.view == 'attendance' and request.GET.type == 'daily' %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(37,99,235,0.12);"><i class="bi bi-calendar-day" style="color:#60A5FA;"></i></span><span>Daily</span>
+            </a>
+            <a href="{% url 'reports' %}?view=attendance&type=weekly" class="nav-item {% if request.GET.view == 'attendance' and request.GET.type == 'weekly' %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(37,99,235,0.12);"><i class="bi bi-calendar-week" style="color:#60A5FA;"></i></span><span>Weekly</span>
+            </a>
+            <a href="{% url 'reports' %}?view=attendance&type=monthly" class="nav-item {% if request.GET.view == 'attendance' and request.GET.type == 'monthly' %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(37,99,235,0.12);"><i class="bi bi-calendar-month" style="color:#60A5FA;"></i></span><span>Monthly</span>
+            </a>
+            <div class="menu-label">Other Reports</div>
+            <a href="{% url 'reports' %}?view=projects&type=weekly" class="nav-item">
+                <span class="nav-icon-bg" style="background:rgba(34,197,94,0.12);"><i class="bi bi-pie-chart-fill" style="color:#86EFAC;"></i></span><span>Projects</span>
+            </a>
+            <a href="{% url 'reports' %}?view=users&type=weekly" class="nav-item">
+                <span class="nav-icon-bg" style="background:rgba(251,191,36,0.12);"><i class="bi bi-person-lines-fill" style="color:#FCD34D;"></i></span><span>Users</span>
+            </a>
+            {% endif %}
+            {# -- CSV Export link (requires can_export_data permission) -- #}
+            {% if perms.attendance.can_export_data %}
+            <a href="{% url 'export_csv' %}?type=monthly" class="nav-item">
+                <span class="nav-icon-bg" style="background:rgba(20,184,166,0.12);"><i class="bi bi-download" style="color:#5EEAD4;"></i></span><span>Export</span>
+            </a>
+            {% endif %}
+            {# -- Maintenance section -- #}
+            <div class="menu-label">Maintenance</div>
+            <a href="{% url 'trash_list' %}" class="nav-item {% if 'trash' in request.resolver_match.url_name %}active{% endif %}">
+                <span class="nav-icon-bg" style="background:rgba(239,68,68,0.12);"><i class="bi bi-trash" style="color:#FCA5A5;"></i></span><span>Trash</span>
+            </a>
+            {# -- Django Admin Panel (superuser only, opens in new tab) -- #}
+            {% if user.is_superuser %}
+            <div class="menu-label">System</div>
+            <a href="{% url 'admin:index' %}" target="_blank" class="nav-item">
+                <span class="nav-icon-bg" style="background:rgba(148,163,184,0.12);"><i class="bi bi-gear-fill" style="color:#94A3B8;"></i></span><span>Admin Panel</span>
+            </a>
+            {% endif %}
+        </div>
+    </nav>
+
+    {# ==================================================================== #}
+    {# SECTION: Top header + main content (admin/manager layout)           #}
+    {# Includes sidebar toggle, page title/subtitle, search dropdown,       #}
+    {# notification bell with dropdown, user info, and logout button.       #}
+    {# The .page-content div wraps child template content.                  #}
+    {# ==================================================================== #}
+    <div class="main-content" id="mainContent">
+        <div class="top-header">
+            <div class="d-flex align-items-center gap-3">
+                {# -- Sidebar burger toggle -- #}
+                <button class="sidebar-toggle" onclick="toggleSidebar()"><i class="bi bi-list" id="toggleIcon"></i></button>
+                {# -- Page title (overridable via {% block page_title %}) and subtitle (usually today's date) -- #}
+                <div class="page-title">
+                    <h4>{% block page_title %}Dashboard{% endblock %}</h4>
+                    <span>{% block page_subtitle %}{% now "j F Y" %}{% endblock %}</span>
+                </div>
+            </div>
+            <div class="user-area">
+                {# -- Global search dropdown (sends GET to global_search view) -- #}
+                <div class="dropdown">
+                    <button class="btn btn-sm" type="button" data-bs-toggle="dropdown"
+                            style="background:var(--bg-primary);border:1px solid var(--border-color);border-radius:var(--radius-sm);color:var(--text-secondary);padding:6px 12px;">
+                        <i class="bi bi-search"></i><span class="d-none d-md-inline ms-1" style="font-size:0.82rem;">Search</span>
+                    </button>
+                    <div class="dropdown-menu dropdown-menu-end search-dropdown p-3 shadow-sm" style="border:none;">
+                        <form action="{% url 'global_search' %}" method="GET">
+                            <div class="input-group">
+                                <input type="text" name="q" class="form-control form-control-sm" placeholder="Search users, projects, tasks..." autofocus>
+                                <button class="btn btn-primary btn-sm"><i class="bi bi-search"></i></button>
+                            </div>
+                        </form>
+                        {# -- Show search results hint if a query is present -- #}
+                        {% if search_query %}
+                        <hr>
+                        <small class="text-muted">Results for "{{ search_query }}"</small>
+                        {% endif %}
+                    </div>
+                </div>
+                {# -- Notifications dropdown -- #}
+                {# Fetches notifications via AJAX; shows count badge, loading/empty states, and individual items #}
+                <div class="dropdown" id="notificationDropdown">
+                    <button class="btn btn-sm position-relative" type="button" data-bs-toggle="dropdown"
+                            style="background:none;border:none;color:var(--text-secondary);font-size:1.1rem;padding:6px;">
+                        <i class="bi bi-bell"></i>
+                        <span id="notifBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill" style="background:var(--danger);font-size:0.45rem;padding:3px 6px;display:none;">0</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end glass-dropdown shadow-sm" style="width:380px;max-height:450px;overflow-y:auto;border:none;" id="notifMenu">
+                        <li><h6 class="dropdown-header d-flex justify-content-between align-items-center">
+                            <span>Notifications <span id="notifHeaderCount" class="badge ms-1" style="background:var(--accent);display:none;">0</span></span>
+                            <a href="{% url 'mark_notifications_read' %}" id="markAllRead" style="font-size:0.7rem;color:var(--accent);text-decoration:none;">Mark all read</a>
+                        </h6></li>
+                        <li id="notifLoading"><span class="dropdown-item-text text-muted text-center py-3" style="font-size:0.8rem;">Loading...</span></li>
+                        <div id="notifList"></div>
+                        <li id="notifEmpty" style="display:none;"><span class="dropdown-item-text text-muted text-center py-3" style="font-size:0.8rem;">No notifications</span></li>
+                    </ul>
+                </div>
+                {# -- User info display (name + role, hidden on mobile) -- #}
+                <div class="user-info text-end d-none d-md-block">
+                    <div class="name" style="font-size:0.82rem;font-weight:600;">{{ user.get_full_name|default:user.username }}</div>
+                    <div class="role" style="font-size:0.62rem;color:var(--text-muted);">{{ user.profile.get_role_display }}</div>
+                </div>
+                {# -- Logout button -- #}
+                <a href="{% url 'logout' %}" class="btn btn-outline-secondary btn-sm btn-rounded px-3" title="Logout" style="border-color:var(--border-color);">
+                    <i class="bi bi-box-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+        {# -- Main page content area where child templates inject their block content -- #}
+        <div class="page-content">
+
+    {# ==================================================================== #}
+    {# SECTION: Employee top navbar                                         #}
+    {# Shown for users with role 'employee'. Contains brand, nav links      #}
+    {# (Dashboard, My Tasks, Open Tasks, Timesheet, History, Calendar,      #}
+    {# Meetings), notification dropdown, and user menu with logout.         #}
+    {# ==================================================================== #}
+    {% elif user.is_authenticated and user.profile.role == 'employee' %}
+    <nav class="navbar navbar-expand-lg" style="background:var(--bg-secondary);border-bottom:1px solid var(--border-color);">
+        <div class="container">
+            <a class="navbar-brand fw-bold" href="#" style="color:var(--text-primary);">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-2" style="vertical-align:-4px;">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="rgba(255,255,255,0.15)"/>
+                    <circle cx="12" cy="12" r="3" fill="currentColor" opacity="0.4"/>
+                    <path d="M12 9v3l2 2" stroke="currentColor" stroke-width="1.5" opacity="0.7"/>
+                </svg>WorkPulse</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" style="border-color:var(--border-color);color:var(--text-secondary);">
+                <span class="navbar-toggler-icon" style="filter:invert(0.8);"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                {# -- Primary nav links -- #}
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="{% url 'employee_dashboard' %}" style="color:var(--text-muted);"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'my_tasks' %}" style="color:var(--text-muted);"><i class="bi bi-check2-square me-1"></i>My Tasks</a></li>
+                    {# -- Open Tasks link with unclaimed count badge -- #}
+                    <li class="nav-item"><a class="nav-link" href="{% url 'open_tasks' %}" style="color:var(--text-muted);"><i class="bi bi-box-seam me-1"></i>Open Tasks{% if open_tasks_count > 0 %} <span class="badge rounded-pill" style="background:var(--success);font-size:0.6rem;">{{ open_tasks_count }}</span>{% endif %}</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'timesheet' %}" style="color:var(--text-muted);"><i class="bi bi-calendar-week me-1"></i>Timesheet</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'attendance_history' %}" style="color:var(--text-muted);"><i class="bi bi-clock me-1"></i>History</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'calendar_view' %}" style="color:var(--text-muted);"><i class="bi bi-calendar3 me-1"></i>Calendar</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{% url 'meeting_list' %}" style="color:var(--text-muted);"><i class="bi bi-people me-1"></i>Meetings</a></li>
+                </ul>
+                {# -- Right-side user area (notifications + profile dropdown) -- #}
+                <ul class="navbar-nav">
+                    {# -- Employee notifications dropdown (mirrors admin version with '2' suffix IDs) -- #}
+                    <li class="nav-item dropdown" id="notificationDropdown2">
+                        <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown" style="color:var(--text-muted);font-size:1.1rem;">
+                            <i class="bi bi-bell"></i>
+                            <span id="notifBadge2" class="position-absolute top-0 start-100 translate-middle badge rounded-pill" style="background:var(--danger);font-size:0.4rem;padding:3px 5px;display:none;">0</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end glass-dropdown shadow-sm" style="width:360px;max-height:400px;overflow-y:auto;border:none;" id="notifMenu2">
+                            <li><h6 class="dropdown-header d-flex justify-content-between align-items-center">
+                                <span>Notifications <span id="notifHeaderCount2" class="badge ms-1" style="background:var(--accent);display:none;">0</span></span>
+                                <a href="{% url 'mark_notifications_read' %}" id="markAllRead2" style="font-size:0.7rem;color:var(--accent);text-decoration:none;">Mark all read</a>
+                            </h6></li>
+                            <li id="notifLoading2"><span class="dropdown-item-text text-muted text-center py-3" style="font-size:0.78rem;">Loading...</span></li>
+                            <div id="notifList2"></div>
+                            <li id="notifEmpty2" style="display:none;"><span class="dropdown-item-text text-muted text-center py-3" style="font-size:0.78rem;">No notifications</span></li>
+                        </ul>
+                    </li>
+                    {# -- User profile dropdown (email, logout) -- #}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" style="color:var(--text-secondary);font-size:0.88rem;"><i class="bi bi-person-circle me-1"></i>{{ user.get_full_name|default:user.username }}</a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><span class="dropdown-item-text text-muted" style="font-size:0.78rem;">{{ user.email }}</span></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'logout' %}"><i class="bi bi-box-arrow-right me-1"></i>Logout</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    {# -- Employee content wrapper -- #}
+    <div class="container mt-4" style="padding-bottom:80px;">
+    {% else %}
+    {# -- Default wrapper for unauthenticated pages (e.g. login) -- #}
+    <div class="container mt-4">
+    {% endif %}
+
+    {# -- Toast notification container (populated dynamically by JS showToast()) -- #}
+    {# Positioned fixed top-right; each toast auto-dismisses after 4 seconds #}
+    <div class="toast-container" id="toastContainer"></div>
+    
+    {# -- Django messages display -- #}
+    {# Renders Django's built-in messages framework as dismissible alerts #}
+    {# Color-coded by tag: success (green), error (red), warning (yellow), info (blue) #}
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert"
+             style="border-radius:var(--radius-md);border:none;background:{% if message.tags == 'success' %}rgba(34,197,94,0.1);color:var(--success){% elif message.tags == 'error' %}rgba(239,68,68,0.1);color:var(--danger){% elif message.tags == 'warning' %}rgba(245,158,11,0.1);color:var(--warning){% else %}rgba(79,70,229,0.1);color:var(--accent);{% endif %}">
+            <i class="bi bi-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-circle{% elif message.tags == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" style="filter:invert(0.8);"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    {% block content %}{% endblock %}
+
+    {# ==================================================================== #}
+    {# SECTION: Layout closers                                            #}
+    {# Closes the .page-content, .main-content (admin/manager), container   #}
+    {# (employee, anonymous). These match the opening divs above.          #}
+    {# ==================================================================== #}
+    {% if user.is_authenticated and user.profile.role in 'admin,manager' %}
+        </div>  {# -- closes .page-content -- #}
+    </div>      {# -- closes .main-content -- #}
+    {# -- Sidebar toggle logic -- #}
+    {# On mobile (<768px): sidebar slides as overlay, hamburger ↔ X icon #}
+    {# On desktop: sidebar stays open by default; closed state hides it entirely #}
+    <script>
+    function toggleSidebar(){
+        var s = document.getElementById('sidebar');
+        var o = document.getElementById('sidebarOverlay');
+        var isMobile = window.innerWidth <= 768;
+        if (s.classList.contains('closed')) {
+            s.classList.remove('closed');
+            if (!isMobile) s.classList.add('open');
+        } else {
+            s.classList.add('closed');
+            s.classList.remove('open');
+        }
+        if (isMobile) { o.classList.toggle('show'); }
+        var icon = document.getElementById('toggleIcon');
+        if (icon) { icon.className = s.classList.contains('closed') ? 'bi bi-list' : 'bi bi-x-lg'; }
+    }
+
+    {# -- Start closed on mobile -- #}
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.add('closed');
+        document.getElementById('sidebar').classList.remove('open');
+    }
+    {# -- Adjust overlay on resize (show on mobile when sidebar is open, hide on desktop) -- #}
+    window.addEventListener('resize', function(){
+        var s = document.getElementById('sidebar');
+        var o = document.getElementById('sidebarOverlay');
+        if (window.innerWidth > 768) {
+            if (s.classList.contains('closed')) o.classList.remove('show');
+        } else {
+            if (!s.classList.contains('closed')) o.classList.add('show');
+        }
+    });
+    </script>
+    {% elif user.is_authenticated and user.profile.role == 'employee' %}
+    </div>  {# -- closes .container -- #}
+    {% else %}
+    </div>  {# -- closes .container (unauthenticated) -- #}
+    {% endif %}
+
+    {# ==================================================================== #}
+    {# SECTION: Global active timer bar                                   #}
+    {# Fixed-bottom bar shown when the user has a running timer.           #}
+    {# Displays pulsating dot, task name, project name, elapsed time       #}
+    {# (live-updated via JS), and a Stop button.                          #}
+    {# ==================================================================== #}
+    {% if active_timer %}
+    <div class="timer-bar" id="globalTimer">
+        <div class="timer-info">
+            <span class="pulse"></span>
+            <div>
+                <div class="task-name">{{ active_timer.task.title }}</div>
+                <div class="project-name">{{ active_timer.task.project.name }}</div>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <span class="timer-clock" id="timerDisplay">{{ active_timer.duration_minutes }}:00</span>
+            <a href="{% url 'timer_stop' %}" class="btn btn-sm btn-rounded px-3" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid rgba(239,68,68,0.2);">
+                <i class="bi bi-stop-fill me-1"></i>Stop
+            </a>
+        </div>
+    </div>
+    <script>
+        (function(){
+            const startTime = new Date("{{ active_timer.start_time|date:'Y-m-d H:i:s'|safe }}").getTime();
+            const display = document.getElementById('timerDisplay');
+            function updateTimer(){
+                const now = new Date().getTime();
+                const diff = Math.floor((now - startTime) / 1000);
+                const h = Math.floor(diff / 3600);
+                const m = Math.floor((diff % 3600) / 60);
+                const s = diff % 60;
+                display.textContent = (h > 0 ? h + ':' : '') + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+            }
+            updateTimer();
+            setInterval(updateTimer, 1000);
+        })();
+    </script>
+    {% endif %}
+
+    {# ==================================================================== #}
+    {# SECTION: Mobile bottom navigation bar                              #}
+    {# Fixed at bottom of viewport on screens <= 768px.                    #}
+    {# For employees: Home, Tasks, Open (with count badge), Sheet, History #}
+    {# For admin/manager: Home, Projects, Board, Meetings, Calendar, Team, Exit #}
+    {# Each item highlights when the current URL matches.                  #}
+    {# ==================================================================== #}
+    {% if user.is_authenticated and user.profile.role == 'employee' %}
+    <nav class="mobile-bottom-nav">
+        <div class="nav-items">
+            <a href="{% url 'employee_dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'employee_dashboard' %}active{% endif %}">
+                <span class="nav-icon-wrap"><i class="bi bi-speedometer2"></span>
+                <span>Home</span>
+            </a>
+            <a href="{% url 'my_tasks' %}" class="nav-item {% if request.resolver_match.url_name == 'my_tasks' %}active{% endif %}">
+                <span class="nav-icon-wrap"><i class="bi bi-list-task"></span>
+                <span>Tasks</span>
+            </a>
+            <a href="{% url 'open_tasks' %}" class="nav-item {% if request.resolver_match.url_name == 'open_tasks' %}active{% endif %}">
+                <span class="nav-icon-wrap"><i class="bi bi-box-seam"></i>
+                {% if open_tasks_count > 0 %}<span class="badge-mobile">{{ open_tasks_count }}</span>{% endif %}</span>
+                <span>Open</span>
+            </a>
+            <a href="{% url 'timesheet' %}" class="nav-item {% if request.resolver_match.url_name == 'timesheet' %}active{% endif %}">
+                <span class="nav-icon-wrap"><i class="bi bi-calendar-week"></span>
+                <span>Sheet</span>
+            </a>
+            <a href="{% url 'attendance_history' %}" class="nav-item {% if request.resolver_match.url_name == 'attendance_history' %}active{% endif %}">
+                <span class="nav-icon-wrap"><i class="bi bi-clock-history"></span>
+                <span>History</span>
+            </a>
+        </div>
+    </nav>
+    {# -- Admin/Manager mobile bottom nav -- #}
+    {% elif user.is_authenticated and user.profile.role in 'admin,manager' %}
+    <nav class="mobile-bottom-nav">
+        <div class="nav-items">
+            <a href="{% if user.profile.role == 'admin' %}{% url 'admin_dashboard' %}{% else %}{% url 'manager_dashboard' %}{% endif %}"
+               class="nav-item {% if request.resolver_match.url_name == 'admin_dashboard' or request.resolver_match.url_name == 'manager_dashboard' %}active{% endif %}">
+                <span class="nav-icon-wrap"><i class="bi bi-speedometer2"></span><span>Home</span>
+            </a>
+            {% if perms.attendance.can_view_projects %}
+            <a href="{% url 'project_list' %}" class="nav-item {% if 'project' in request.resolver_match.url_name %}active{% endif %}">
+                <span class="nav-icon-wrap"><i class="bi bi-folder"></span><span>Projects</span>
+            </a>
+            {% endif %}
+            {% if perms.attendance.can_view_tasks %}
+            <a href="{% url 'task_board' %}" class="nav-item {% if request.resolver_match.url_name == 'task_board' %}active{% endif %}">
+                <span class="nav-icon-wrap"><i class="bi bi-kanban"></span><span>Board</span>
+            </a>
+            {% endif %}
+            <a href="{% url 'meeting_list' %}" class="nav-item {% if 'meeting' in request.resolver_match.url_name %}active{% endif %}">
+                <span class="nav-icon-wrap"><i class="bi bi-people"></span><span>Meetings</span>
+            </a>
+            <a href="{% url 'calendar_view' %}" class="nav-item {% if 'calendar' in request.resolver_match.url_name %}active{% endif %}">
+                <span class="nav-icon-wrap"><i class="bi bi-calendar3"></span><span>Calendar</span>
+            </a>
+            <a href="{% url 'employee_list' %}" class="nav-item {% if 'employee' in request.resolver_match.url_name %}active{% endif %}">
+                <span class="nav-icon-wrap"><i class="bi bi-people-fill"></span><span>Team</span>
+            </a>
+            <a href="{% url 'logout' %}" class="nav-item">
+                <span class="nav-icon-wrap"><i class="bi bi-box-arrow-right"></span><span>Exit</span>
+            </a>
+        </div>
+    </nav>
+    {% endif %}
+
+    {# -- Bootstrap JS bundle (includes Popper) and WebSocket client -- #}
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{% static 'js/ws.js' %}"></script>
+    <script>
+        {% load static %}
+
+        {# -- Duplicate sidebar toggle for the second .sidebar instance? -- #}
+        function toggleSidebar(){
+            var s=document.getElementById('sidebar');
+            s.classList.toggle('open');
+            s.classList.toggle('collapsed');
+        }
+        {# -- Highlight active mobile nav items -- #}
+        document.querySelectorAll('.mobile-bottom-nav .nav-item').forEach(item => {
+            if(item.classList.contains('active')) {
+                item.style.color = 'var(--accent-hover)';
+            }
+        });
+
+        {# -- CSRF token helper -- #}
+        {# Reads csrftoken cookie for AJAX requests #}
+        function getCsrf() {
+            const m = document.cookie.match(/csrftoken=([^;]+)/);
+            return m ? m[1] : '';
+        }
+        {# -- Render notifications into the dropdown -- #}
+        {# Handles two cases:                                     #}
+        {#   1. A single new notification (real-time push)        #}
+        {#      - Prepends it to the list, updates badge count    #}
+        {#   2. Bulk list replacement (on dropdown open / poll)   #}
+        {#      - Replaces innerHTML, shows empty state if none   #}
+        {# Uses `isEmployee` to pick the correct DOM prefix ('2') #}
+        function renderNotifications(data, isEmployee) {
+            const prefix = isEmployee ? '2' : '';
+            const list = document.getElementById('notifList' + prefix);
+            const loading = document.getElementById('notifLoading' + prefix);
+            const empty = document.getElementById('notifEmpty' + prefix);
+            const badge = document.getElementById('notifBadge' + prefix);
+            const hdrCount = document.getElementById('notifHeaderCount' + prefix);
+            if (!list) return;
+            loading.style.display = 'none';
+            const notifs = data.notifications || [];
+
+            if (data.type === 'notification_new' && notifs.length === 1) {
+                const n = notifs[0];
+                const existing = list.querySelector('[data-notif-id="' + n.id + '"]');
+                if (existing) return;
+                const div = document.createElement('div');
+                div.setAttribute('data-notif-id', n.id);
+                div.className = 'dropdown-item d-flex align-items-start gap-2 py-2';
+                div.style.cssText = 'white-space:normal;font-size:0.78rem;border-left:3px solid ' + (n.color || '#818CF8') + ';background:rgba(99,102,241,0.05);';
+                div.innerHTML =
+                    '<i class="bi ' + (n.icon || 'bi-bell') + '" style="color:' + (n.color || '#818CF8') + ';font-size:0.95rem;margin-top:2px;"></i>' +
+                    '<div class="flex-grow-1" style="min-width:0;">' +
+                        '<div style="font-size:0.72rem;line-height:1.3;">' + n.message + '</div>' +
+                        '<div class="d-flex gap-2 mt-1">' +
+                            '<span class="badge" style="background:' + (n.color || '#818CF8') + ';font-size:0.5rem;padding:1px 6px;">' + n.priority + '</span>' +
+                            '<span style="font-size:0.55rem;color:#64748B;">' + (n.created_at ? n.created_at.slice(0,10) : '') + '</span>' +
+                        '</div>' +
+                    '</div>' +
+                    '<button class="btn btn-sm p-0" style="color:#64748B;font-size:0.65rem;flex-shrink:0;" onclick="event.stopPropagation();var p=this.closest(\'.dropdown-item\');fetch(\'/notifications/dismiss/' + n.id + '/\',{headers:{\'X-Requested-With\':\'XMLHttpRequest\'}}).then(function(){if(p)p.remove();});">&times;</button>';
+                list.prepend(div);
+                empty.style.display = 'none';
+                const count = parseInt(badge.textContent, 10) || 0;
+                badge.textContent = count + 1;
+                badge.style.display = '';
+                if (hdrCount) { hdrCount.textContent = count + 1; hdrCount.style.display = ''; }
+                return;
+            }
+
+            const unread = data.unread_count || 0;
+            if (notifs.length === 0) {
+                empty.style.display = 'block';
+                list.innerHTML = '';
+            } else {
+                empty.style.display = 'none';
+                list.innerHTML = notifs.map(function(n) {
+                    return '<div class="dropdown-item d-flex align-items-start gap-2 py-2" style="white-space:normal;font-size:0.78rem;border-left:3px solid ' + (n.color || '#818CF8') + ';background:rgba(99,102,241,0.03);" data-notif-id="' + n.id + '">' +
+                        '<i class="bi ' + (n.icon || 'bi-bell') + '" style="color:' + (n.color || '#818CF8') + ';font-size:0.95rem;margin-top:2px;"></i>' +
+                        '<div class="flex-grow-1" style="min-width:0;">' +
+                            '<div style="font-size:0.72rem;line-height:1.3;">' + n.message + '</div>' +
+                            '<div class="d-flex gap-2 mt-1">' +
+                                '<span class="badge" style="background:' + (n.color || '#818CF8') + ';font-size:0.5rem;padding:1px 6px;">' + n.priority + '</span>' +
+                                '<span style="font-size:0.55rem;color:#64748B;">' + (n.created_at ? n.created_at.slice(0,10) : '') + '</span>' +
+                            '</div>' +
+                        '</div>' +
+                        '<button class="btn btn-sm p-0" style="color:#64748B;font-size:0.65rem;flex-shrink:0;" onclick="event.stopPropagation();var p=this.closest(\'.dropdown-item\');fetch(\'/notifications/dismiss/' + n.id + '/\',{headers:{\'X-Requested-With\':\'XMLHttpRequest\'}}).then(function(){if(p)p.remove();});">&times;</button>' +
+                    '</div>';
+                }).join('');
+            }
+            badge.textContent = unread;
+            badge.style.display = unread > 0 ? 'inline' : 'none';
+            if (hdrCount) { hdrCount.textContent = unread; hdrCount.style.display = unread > 0 ? 'inline' : 'none'; }
+        }
+
+
+        {# -- Initial notification poll on page load -- #}
+        (function() {
+            fetch('/notifications/poll/')
+                .then(function(r){ return r.json(); })
+                .then(function(data){
+                    renderNotifications(data, false);
+                    renderNotifications(data, true);
+                })
+                .catch(function(){});
+        })();
+
+        {# -- Re-fetch notifications when dropdown opens -- #}
+        {# Listens for Bootstrap's shown.bs.dropdown event on either notification dropdown #}
+        document.addEventListener('shown.bs.dropdown', function(e) {
+            if (e.target.closest && (e.target.closest('#notificationDropdown') || e.target.closest('#notificationDropdown2'))) {
+                fetch('/notifications/poll/')
+                    .then(function(r){ return r.json(); })
+                    .then(function(data){
+                        renderNotifications(data, false);
+                        renderNotifications(data, true);
+                    })
+                    .catch(function(){});
+            }
+        });
+
+
+        {# -- Show a toast notification -- #}
+        {# Dynamically creates a toast element with icon matching the type #}
+        {# Types: success, error, warning, info. Auto-dismisses after 4s. #}
+        function showToast(message, type) {
+            type = type || 'info';
+            var icons = { success: 'check-circle-fill', error: 'x-circle-fill', warning: 'exclamation-triangle-fill', info: 'info-circle-fill' };
+            var container = document.getElementById('toastContainer');
+            if (!container) return;
+            var toast = document.createElement('div');
+            toast.className = 'toast toast-' + type;
+            toast.innerHTML =
+                '<div class="toast-header">' +
+                    '<div class="toast-icon"><i class="bi bi-' + (icons[type] || icons.info) + '"></i></div>' +
+                    '<span class="flex-grow-1">' + type.charAt(0).toUpperCase() + type.slice(1) + '</span>' +
+                    '<button class="btn-close btn-close-sm" onclick="this.closest(\'.toast\').classList.add(\'toast-out\');setTimeout(function(){this.closest(\'.toast\').remove()}.bind(this),300);"></button>' +
+                '</div>' +
+                '<div class="toast-body">' + message + '</div>';
+            container.appendChild(toast);
+            setTimeout(function() {
+                toast.classList.add('toast-out');
+                setTimeout(function(){ toast.remove(); }, 300);
+            }, 4000);
+        }
+
+
+        {# -- Auto-dim Django alert messages after 5 seconds -- #}
+        (function() {
+            var msgs = document.querySelectorAll('.alert');
+            msgs.forEach(function(el) {
+                setTimeout(function() {
+                    el.style.transition = 'opacity 0.5s';
+                    el.style.opacity = '0.6';
+                }, 5000);
+            });
+        })();
+    </script>
+    {% block extra_js %}{% endblock %}  {# Hook for child templates to add page-specific JS #}
+</body>
+</html>

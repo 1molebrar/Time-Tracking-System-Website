@@ -1,0 +1,58 @@
+{# -- Page: Project List -- #}
+{# -- Purpose: Displays all non-deleted projects in a responsive card grid. Each card shows key project metadata and provides quick-action links for viewing, editing, archiving/unarchiving, and deleting. Extends base.html and populates title/page_title/page_subtitle blocks. -- #}
+{% extends 'base.html' %}
+{% block title %}Projects — WorkPulse{% endblock %}
+{% block page_title %}Projects{% endblock %}
+{% block page_subtitle %}Manage your projects{% endblock %}
+{% block content %}
+{# -- Section: Header toolbar -- #}
+{# -- Renders a top bar with a dynamic count of total projects (pluralized) on the left and a "New Project" button linking to project_add on the right. -- #}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <p class="text-muted mb-0">{{ projects|length }} project{{ projects|length|pluralize }}</p>
+    <a href="{% url 'project_add' %}" class="btn btn-primary btn-sm btn-rounded"><i class="bi bi-plus-lg me-1"></i>New Project</a>
+</div>
+{# -- Section: Project card grid -- #}
+{# -- Loops over the `projects` queryset, rendering each project as a Bootstrap card in a 3-column responsive grid (col-xl-4 col-md-6). Each card displays: project name, status badge (colored by active/completed/archived), optional client name, truncated description, task count, and action buttons (view, edit, archive toggle, delete with confirmation). If no projects exist, renders an empty-state component with a link to create the first project. -- #}
+<div class="row g-3">
+    {% for p in projects %}
+    <div class="col-xl-4 col-md-6">
+        <div class="card glass-card h-100">
+            <div class="card-body p-4">
+                {# -- Project name + status badge -- #}
+                {# -- Status badge color: green for active, gray for completed, light for archived/default. Uses get_status_display for human-readable label. -- #}
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="fw-semibold mb-0">{{ p.name }}</h5>
+                    <span class="badge {% if p.status == 'active' %}bg-success{% elif p.status == 'completed' %}bg-secondary{% else %}bg-light text-muted{% endif %}">{{ p.get_status_display }}</span>
+                </div>
+                {# -- Optional client name -- #}
+                {% if p.client %}<small class="text-muted"><i class="bi bi-building me-1"></i>{{ p.client.name }}</small>{% endif %}
+                {# -- Truncated description (20 words) with fallback -- #}
+                <p class="text-muted small mt-2 mb-3">{{ p.description|truncatewords:20|default:'No description' }}</p>
+                {# -- Footer: task count + action buttons -- #}
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">{{ p.tasks.count }} task{{ p.tasks.count|pluralize }}</small>
+                    <div class="d-flex gap-1">
+                        <a href="{% url 'project_detail' p.id %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+                        <a href="{% url 'project_edit' p.id %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></a>
+                        {# -- Archive/unarchive toggle with conditional icon/title -- #}
+                        {% if p.is_archived %}
+                        <a href="{% url 'project_unarchive' p.id %}" class="btn btn-sm btn-outline-warning" title="Restore from archive"><i class="bi bi-archive"></i></a>
+                        {% else %}
+                        <a href="{% url 'project_archive' p.id %}" class="btn btn-sm btn-outline-warning" title="Archive"><i class="bi bi-archive"></i></a>
+                        {% endif %}
+                        {# -- Delete (soft-delete to trash) with JavaScript confirmation -- #}
+                        <a href="{% url 'project_delete' p.id %}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Move project &quot;{{ p.name }}&quot; to trash?')"><i class="bi bi-trash"></i></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    {# -- Empty state: shown when projects queryset is empty -- #}
+    <div class="col-12">
+        {% url 'project_add' as project_add_url %}
+        {% include 'components/_empty_state.html' with icon='folder' title='No projects yet' message='Create your first project to get started.' action_url=project_add_url action_text='Create Project' %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
